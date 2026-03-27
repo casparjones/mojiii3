@@ -1,0 +1,98 @@
+import 'dart:math';
+
+import '../models/board.dart';
+import '../models/position.dart';
+import 'gravity_handler.dart';
+import 'match_detector.dart';
+
+/// Result of a single cascade step.
+class CascadeStep {
+  final List<Match> matches;
+  final int cascadeLevel;
+
+  const CascadeStep({
+    required this.matches,
+    required this.cascadeLevel,
+  });
+
+  /// Total number of gems cleared in this step.
+  int get gemsCleared {
+    final positions = <Position>{};
+    for (final match in matches) {
+      positions.addAll(match.positions);
+    }
+    return positions.length;
+  }
+
+  /// Score multiplier for this cascade level.
+  double get multiplier => 1.0 + (cascadeLevel - 1) * 0.5;
+}
+
+/// Result of a full cascade resolution.
+class CascadeResult {
+  final List<CascadeStep> steps;
+
+  const CascadeResult({required this.steps});
+
+  /// Total number of cascade steps.
+  int get cascadeCount => steps.length;
+
+  /// Total gems cleared across all steps.
+  int get totalGemsCleared =>
+      steps.fold(0, (sum, step) => sum + step.gemsCleared);
+
+  /// Whether any matches were found.
+  bool get hadMatches => steps.isNotEmpty;
+}
+
+/// Runs the full cascade loop: detect matches -> remove -> gravity -> refill -> repeat.
+class CascadeEngine {
+  final MatchDetector _matchDetector;
+  final GravityHandler _gravityHandler;
+
+  /// Maximum cascade iterations to prevent infinite loops.
+  static const int maxCascades = 100;
+
+  CascadeEngine({
+    MatchDetector matchDetector = const MatchDetector(),
+    GravityHandler? gravityHandler,
+    int gemTypeCount = 6,
+    Random? random,
+  })  : _matchDetector = matchDetector,
+        _gravityHandler = gravityHandler ??
+            GravityHandler(gemTypeCount: gemTypeCount, random: random);
+
+  /// Resolves all cascades on the board after a move.
+  /// Modifies the board in-place and returns cascade details.
+  CascadeResult resolve(Board board) {
+    final steps = <CascadeStep>[];
+    var cascadeLevel = 0;
+
+    for (var i = 0; i < maxCascades; i++) {
+      final matches = _matchDetector.findMatches(board);
+      if (matches.isEmpty) break;
+
+      cascadeLevel++;
+
+      steps.add(CascadeStep(
+        matches: matches,
+        cascadeLevel: cascadeLevel,
+      ));
+
+      // Remove matched gems
+      final positions = <Position>{};
+      for (final match in matches) {
+        positions.addAll(match.positions);
+      }
+      board.removeGems(positions);
+
+      // Apply gravity
+      _gravityHandler.applyGravity(board);
+
+      // Refill
+      _gravityHandler.refill(board);
+    }
+
+    return CascadeResult(steps: steps);
+  }
+}
