@@ -1,12 +1,12 @@
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 
 import 'game_state_manager.dart';
 
 /// Manages sound effects for the game.
 ///
-/// Currently implemented as a stub that logs sound events but does not
-/// actually play audio. When real audio is needed, integrate the
-/// `audioplayers` package and replace the stub implementations.
+/// Uses the audioplayers package to play WAV sound effects.
+/// A pool of AudioPlayer instances enables overlapping sounds.
 ///
 /// Usage:
 /// ```dart
@@ -21,29 +21,50 @@ class AudioManager {
   /// If true, logs sound events to debugPrint (useful for testing/debugging).
   final bool debugLog;
 
+  /// If true, actually play audio via audioplayers. False for test instances.
+  final bool _useAudio;
+
   /// Tracks the last played sound (useful for testing).
   String? _lastPlayedSound;
 
   /// How many sounds have been played in total.
   int _playCount = 0;
 
+  /// Pool of AudioPlayer instances for overlapping sounds.
+  List<AudioPlayer>? _players;
+
+  /// Round-robin index into the player pool.
+  int _currentPlayerIndex = 0;
+
+  /// Whether this manager has been disposed.
+  bool _disposed = false;
+
   AudioManager({
     required this.settingsProvider,
     this.debugLog = false,
-  });
+    bool useAudio = false,
+  }) : _useAudio = useAudio {
+    if (_useAudio) {
+      _players = List.generate(3, (_) => AudioPlayer());
+    }
+  }
 
   /// Creates an AudioManager that always has sound enabled (for testing).
+  /// Does NOT initialize real audio players.
   factory AudioManager.alwaysEnabled({bool debugLog = false}) {
     return AudioManager(
       settingsProvider: () => GameSettings(soundEnabled: true),
       debugLog: debugLog,
+      useAudio: false,
     );
   }
 
   /// Creates an AudioManager that always has sound disabled.
+  /// Does NOT initialize real audio players.
   factory AudioManager.disabled() {
     return AudioManager(
       settingsProvider: () => GameSettings(soundEnabled: false),
+      useAudio: false,
     );
   }
 
@@ -86,23 +107,20 @@ class AudioManager {
       debugPrint('AudioManager: playing "$soundName"');
     }
 
-    // TODO: Integrate audioplayers package for real sound playback.
-    // Example implementation with audioplayers:
-    //
-    // final player = AudioPlayer();
-    // await player.play(AssetSource('sounds/$soundName.mp3'));
-    //
-    // Or generate tones programmatically:
-    // - match: 880Hz sine wave, 100ms
-    // - swap: 440Hz -> 660Hz sweep, 150ms
-    // - combo: 440Hz, 660Hz, 880Hz sequence, 300ms
-    // - win: C major arpeggio, 500ms
-    // - lose: descending minor scale, 500ms
-    // - tap: 1000Hz click, 50ms
+    if (_useAudio && _players != null && !_disposed) {
+      final player = _players![_currentPlayerIndex];
+      _currentPlayerIndex = (_currentPlayerIndex + 1) % _players!.length;
+      player.play(AssetSource('sounds/$soundName.wav'));
+    }
   }
 
   /// Dispose of any audio resources.
   void dispose() {
-    // TODO: Dispose audioplayer instances when real audio is implemented.
+    if (_useAudio && _players != null && !_disposed) {
+      for (final player in _players!) {
+        player.dispose();
+      }
+      _disposed = true;
+    }
   }
 }

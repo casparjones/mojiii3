@@ -5,8 +5,12 @@ import 'package:flutter/material.dart';
 import '../models/board.dart';
 import '../models/gem_type.dart';
 import '../models/position.dart';
+import '../game/audio_manager.dart';
 import '../game/board_animation_controller.dart';
+import '../game/music_manager.dart';
+import '../main.dart';
 import '../game/deadlock_detector.dart';
+import '../game/game_state_manager.dart';
 import '../game/gravity_handler.dart';
 import '../game/level_generator.dart';
 import '../game/match_detector.dart';
@@ -31,6 +35,9 @@ class GameScreen extends StatefulWidget {
   /// Callback when a power-up is used (to persist changes externally).
   final VoidCallback? onPowerUpUsed;
 
+  /// Optional AudioManager for sound effects. If null, a default one is created.
+  final AudioManager? audioManager;
+
   const GameScreen({
     super.key,
     this.levelConfig,
@@ -38,6 +45,7 @@ class GameScreen extends StatefulWidget {
     this.coinBalance,
     this.saveState,
     this.onPowerUpUsed,
+    this.audioManager,
   });
 
   @override
@@ -72,6 +80,9 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   int _maxCascade = 0;
   int _coinsEarnedThisLevel = 0;
 
+  late AudioManager _audioManager;
+  MusicManager? _musicManager;
+
   late AnimationController _comboAnimController;
   Timer? _comboFadeOutTimer;
 
@@ -83,6 +94,11 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+    _audioManager = widget.audioManager ??
+        AudioManager(
+          settingsProvider: () => GameSettings(soundEnabled: true),
+          useAudio: true,
+        );
     _matchDetector = const MatchDetector();
     _scoreCalculator = const ScoreCalculator();
     _deadlockDetector = const DeadlockDetector();
@@ -103,7 +119,14 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _musicManager ??= MusicManagerProvider.read(context);
+  }
+
+  @override
   void dispose() {
+    _audioManager.dispose();
     _animController.dispose();
     _comboAnimController.dispose();
     _comboFadeOutTimer?.cancel();
@@ -157,6 +180,7 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     }
 
     if (_selected == null) {
+      _audioManager.playTap();
       setState(() {
         _selected = tapped;
         _hintPositions = {};
@@ -206,6 +230,7 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
 
     // Animate the swap.
     await _animController.animateSwap(a, b);
+    _audioManager.playSwap();
 
     // Apply the swap.
     _board.swap(a, b);
@@ -282,6 +307,13 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       );
       _obstaclesDestroyed += obstacleResult.destroyedCount;
       _obstacleManager.cleanupDestroyed();
+
+      // Play sound for match/combo.
+      if (cascadeLevel > 1) {
+        _audioManager.playCombo();
+      } else {
+        _audioManager.playMatch();
+      }
 
       // Animate match.
       setState(() => _matchedPositions = allMatchedPos);
@@ -413,6 +445,7 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
 
   void _endLevel({required bool won}) {
     _levelEnded = true;
+    _musicManager?.pause();
 
     int stars = 0;
     int coinsEarned = 0;
@@ -430,6 +463,12 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       _score = levelScore.totalScore;
     }
 
+    if (won) {
+      _audioManager.playWin();
+    } else {
+      _audioManager.playLose();
+    }
+
     widget.onLevelEnd?.call(won, _score, stars, coinsEarned);
 
     // Show dialog after frame.
@@ -443,6 +482,8 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   /// End the free/endless mode game when moves run out.
   void _endFreeMode() {
     _levelEnded = true;
+    _musicManager?.pause();
+    _audioManager.playLose();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -491,6 +532,7 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
             onPressed: () {
               Navigator.of(ctx).pop();
               setState(() => _initBoard());
+              _musicManager?.resume();
             },
             child: const Text(
               'Play Again',
@@ -564,6 +606,7 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
             onPressed: () {
               Navigator.of(ctx).pop();
               setState(() => _initBoard());
+              _musicManager?.resume();
             },
             child: Text(
               won ? 'Retry' : 'Try Again',
@@ -1381,11 +1424,49 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                     ? null
                     : () => setState(() => _initBoard()),
               ),
+              _buildButton(
+                icon: Icons.exit_to_app,
+                label: 'Exit',
+                onTap: _processing ? null : _confirmExit,
+              ),
             ],
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _confirmExit() async {
+    final shouldExit = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF16213e),
+        title: const Text(
+          'Spiel verlassen?',
+          style: TextStyle(color: Colors.white),
+        ),
+        content: const Text(
+          'Spiel verlassen? Fortschritt geht verloren.',
+          style: TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Abbrechen',
+                style: TextStyle(color: Colors.white70)),
+          ),
+          TextButton(
+            key: const Key('exit_confirm_btn'),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Verlassen',
+                style: TextStyle(color: Colors.redAccent)),
+          ),
+        ],
+      ),
+    );
+    if (shouldExit == true && mounted) {
+      Navigator.pop(context);
+    }
   }
 
   Widget _buildPowerUpBar() {

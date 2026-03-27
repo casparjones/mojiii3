@@ -237,7 +237,10 @@ class ShopScreen extends StatelessWidget {
   }
 
   Widget _buildShopCard(BuildContext context, GameStateManager gsm, ShopItem item) {
-    final owned = gsm.saveState.isExtraUnlocked(item.id);
+    final isTheme = item.category == ShopCategory.theme;
+    final owned = item.id == 'theme_fruit' ||
+        gsm.saveState.isExtraUnlocked(item.id);
+    final isActive = isTheme && gsm.selectedThemeId == item.id;
     final canAfford = gsm.coins >= item.price;
 
     return Card(
@@ -247,9 +250,11 @@ class ShopScreen extends StatelessWidget {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(
-          color: owned
-              ? Colors.green.withValues(alpha: 0.5)
-              : Colors.white12,
+          color: isActive
+              ? Colors.green.withValues(alpha: 0.7)
+              : owned
+                  ? Colors.green.withValues(alpha: 0.5)
+                  : Colors.white12,
         ),
       ),
       child: Padding(
@@ -302,8 +307,55 @@ class ShopScreen extends StatelessWidget {
               ),
             ),
 
-            // Price / Buy button
-            if (owned)
+            // Action button
+            if (isTheme && owned && isActive)
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.green.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Text(
+                  'Active \u2713',
+                  style: TextStyle(
+                    color: Colors.green,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              )
+            else if (isTheme && owned && !isActive)
+              GestureDetector(
+                onTap: () {
+                  gsm.setTheme(item.id);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Theme activated! \u{1F3A8}'),
+                      backgroundColor: Colors.deepPurple,
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                },
+                child: Container(
+                  key: Key('use_theme_${item.id}'),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Colors.deepPurple, Colors.blueAccent],
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Text(
+                    'Use',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              )
+            else if (owned)
               Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 8),

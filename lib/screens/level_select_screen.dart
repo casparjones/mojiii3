@@ -59,35 +59,113 @@ class _LevelSelectScreenState extends State<LevelSelectScreen> {
     );
   }
 
+  /// Returns level numbers for the "New Levels" tab:
+  /// unlocked levels with no completion (stars == 0), plus the next locked
+  /// level as a preview.
+  List<int> _newLevels(GameStateManager gsm) {
+    final result = <int>[];
+    int? firstLockedLevel;
+    for (var i = 1; i <= widget.totalLevels; i++) {
+      final unlocked = gsm.isLevelUnlocked(i);
+      final record = gsm.levelRecords[i];
+      final stars = record?.bestStars ?? 0;
+      if (unlocked && stars == 0) {
+        result.add(i);
+      } else if (!unlocked && firstLockedLevel == null) {
+        firstLockedLevel = i;
+      }
+    }
+    if (firstLockedLevel != null) {
+      result.add(firstLockedLevel);
+    }
+    return result;
+  }
+
+  /// Returns level numbers for the "Completed" tab:
+  /// levels with bestStars > 0.
+  List<int> _completedLevels(GameStateManager gsm) {
+    final result = <int>[];
+    for (var i = 1; i <= widget.totalLevels; i++) {
+      final record = gsm.levelRecords[i];
+      final stars = record?.bestStars ?? 0;
+      if (stars > 0) {
+        result.add(i);
+      }
+    }
+    return result;
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF1a1a2e),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF16213e),
-        title: const Text(
-          'Select Level',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 2,
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        backgroundColor: const Color(0xFF1a1a2e),
+        appBar: AppBar(
+          backgroundColor: const Color(0xFF16213e),
+          title: const Text(
+            'Select Level',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 2,
+            ),
+          ),
+          centerTitle: true,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back, color: Colors.white),
+            onPressed: () => Navigator.pop(context),
+          ),
+          elevation: 0,
+          bottom: const TabBar(
+            indicatorColor: Colors.amberAccent,
+            labelColor: Colors.amberAccent,
+            unselectedLabelColor: Colors.white54,
+            tabs: [
+              Tab(text: 'New Levels'),
+              Tab(text: 'Completed'),
+            ],
           ),
         ),
-        centerTitle: true,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
+        body: ListenableBuilder(
+          listenable: _gsm,
+          builder: (context, _) {
+            final gsm = _gsm;
+            final newLevels = _newLevels(gsm);
+            final completed = _completedLevels(gsm);
+            return TabBarView(
+              children: [
+                _buildFilteredGrid(
+                  levels: newLevels,
+                  emptyMessage: 'Alle Level geschafft! \u{1F389}',
+                ),
+                _buildFilteredGrid(
+                  levels: completed,
+                  emptyMessage: 'Noch kein Level abgeschlossen',
+                ),
+              ],
+            );
+          },
         ),
-        elevation: 0,
-      ),
-      body: ListenableBuilder(
-        listenable: _gsm,
-        builder: (context, _) => _buildLevelGrid(),
       ),
     );
   }
 
-  Widget _buildLevelGrid() {
+  Widget _buildFilteredGrid({
+    required List<int> levels,
+    required String emptyMessage,
+  }) {
+    if (levels.isEmpty) {
+      return Center(
+        child: Text(
+          emptyMessage,
+          style: const TextStyle(
+            color: Colors.white70,
+            fontSize: 18,
+          ),
+        ),
+      );
+    }
     return Padding(
       padding: const EdgeInsets.all(16),
       child: GridView.builder(
@@ -97,10 +175,9 @@ class _LevelSelectScreenState extends State<LevelSelectScreen> {
           crossAxisSpacing: 12,
           childAspectRatio: 0.85,
         ),
-        itemCount: widget.totalLevels,
+        itemCount: levels.length,
         itemBuilder: (context, index) {
-          final levelNumber = index + 1;
-          return _buildLevelTile(levelNumber);
+          return _buildLevelTile(levels[index]);
         },
       ),
     );
@@ -144,7 +221,7 @@ class _LevelSelectScreenState extends State<LevelSelectScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             if (!unlocked)
-              const Text('🔒', style: TextStyle(fontSize: 24))
+              const Text('\u{1F512}', style: TextStyle(fontSize: 24))
             else ...[
               Text(
                 '$levelNumber',
@@ -179,7 +256,7 @@ class _LevelSelectScreenState extends State<LevelSelectScreen> {
       mainAxisSize: MainAxisSize.min,
       children: List.generate(3, (i) {
         return Text(
-          i < count ? '⭐' : '☆',
+          i < count ? '\u2B50' : '\u2606',
           style: TextStyle(
             fontSize: 12,
             color: i < count ? Colors.amber : Colors.white30,

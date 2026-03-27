@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
+import '../game/music_manager.dart';
 import '../main.dart';
 import '../models/emoji_theme.dart';
 import 'level_select_screen.dart';
@@ -46,6 +47,7 @@ class _MainMenuScreenState extends State<MainMenuScreen>
   late final Animation<double> _logoEmojiAnimation;
   final List<_FloatingEmoji> _floatingEmojis = [];
   final Random _rng = Random();
+  MusicManager? _musicManager;
 
   int _logoEmojiIndex = 0;
 
@@ -97,6 +99,15 @@ class _MainMenuScreenState extends State<MainMenuScreen>
     // Generate initial floating emojis
     _generateFloatingEmojis();
   }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Start background music when the main menu is shown.
+    _musicManager ??= MusicManagerProvider.read(context);
+    _musicManager?.play();
+  }
+
 
   void _generateFloatingEmojis() {
     for (int i = 0; i < 15; i++) {
