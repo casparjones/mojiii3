@@ -189,7 +189,8 @@ void main() {
         scrollable: find.byType(Scrollable).last,
       );
 
-      expect(find.text('+5 extra moves'), findsOneWidget);
+      expect(find.text('+20 extra moves'), findsOneWidget);
+      expect(find.text('+60 extra moves'), findsOneWidget);
       expect(find.text('Shuffle the board'), findsOneWidget);
       expect(find.text('Destroy all of one color'), findsOneWidget);
     });

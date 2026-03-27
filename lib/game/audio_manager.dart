@@ -45,7 +45,24 @@ class AudioManager {
     bool useAudio = false,
   }) : _useAudio = useAudio {
     if (_useAudio) {
-      _players = List.generate(3, (_) => AudioPlayer());
+      _players = List.generate(3, (_) {
+        final player = AudioPlayer();
+        player.setPlayerMode(PlayerMode.lowLatency);
+        player.setAudioContext(AudioContext(
+          android: AudioContextAndroid(
+            isSpeakerphoneOn: false,
+            audioMode: AndroidAudioMode.normal,
+            contentType: AndroidContentType.sonification,
+            usageType: AndroidUsageType.assistanceSonification,
+            audioFocus: AndroidAudioFocus.none,
+          ),
+          iOS: AudioContextIOS(
+            category: AVAudioSessionCategory.playback,
+            options: {AVAudioSessionOptions.mixWithOthers},
+          ),
+        ));
+        return player;
+      });
     }
   }
 

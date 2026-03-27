@@ -58,7 +58,8 @@ void main() {
         200,
         scrollable: find.byType(Scrollable).last,
       );
-      expect(find.text('Extra Moves'), findsOneWidget);
+      expect(find.text('Extra Moves (20)'), findsOneWidget);
+      expect(find.text('Mega Moves (60)'), findsOneWidget);
       expect(find.text('Shuffle'), findsOneWidget);
       expect(find.text('Color Bomb'), findsOneWidget);
     });

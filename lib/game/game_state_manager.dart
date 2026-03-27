@@ -238,6 +238,28 @@ class GameStateManager extends ChangeNotifier {
     EmojiTheme.setActiveById(_saveState.selectedThemeId);
   }
 
+  /// Notify listeners and schedule a save.
+  /// Useful when external code modifies the [saveState] directly.
+  void persistState() {
+    notifyListeners();
+    _scheduleSave();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Bonus moves regeneration
+  // ---------------------------------------------------------------------------
+
+  /// Regenerate bonus moves based on elapsed time.
+  /// Returns the number of new moves regenerated.
+  int regenerateMoves() {
+    final regen = _saveState.regenerateMoves();
+    if (regen > 0) {
+      notifyListeners();
+      _scheduleSave();
+    }
+    return regen;
+  }
+
   // ---------------------------------------------------------------------------
   // Login reward
   // ---------------------------------------------------------------------------

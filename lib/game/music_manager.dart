@@ -33,7 +33,22 @@ class MusicManager {
     if (_isPlaying) return;
 
     try {
-      _player ??= AudioPlayer();
+      if (_player == null) {
+        _player = AudioPlayer();
+        await _player!.setAudioContext(AudioContext(
+          android: AudioContextAndroid(
+            isSpeakerphoneOn: false,
+            audioMode: AndroidAudioMode.normal,
+            contentType: AndroidContentType.music,
+            usageType: AndroidUsageType.media,
+            audioFocus: AndroidAudioFocus.gainTransientMayDuck,
+          ),
+          iOS: AudioContextIOS(
+            category: AVAudioSessionCategory.playback,
+            options: {AVAudioSessionOptions.mixWithOthers},
+          ),
+        ));
+      }
       await _player!.setReleaseMode(ReleaseMode.loop);
       await _player!.setVolume(_volume);
       await _player!.play(AssetSource('sounds/background_music.mp3'));

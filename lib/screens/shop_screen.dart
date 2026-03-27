@@ -55,10 +55,18 @@ const List<ShopItem> shopThemes = [
 const List<ShopItem> shopPowerUps = [
   ShopItem(
     id: 'powerup_extra_moves',
-    name: 'Extra Moves',
-    description: '+5 extra moves',
+    name: 'Extra Moves (20)',
+    description: '+20 extra moves',
     emojis: '➕5️⃣',
     price: 200,
+    category: ShopCategory.powerUp,
+  ),
+  ShopItem(
+    id: 'powerup_mega_moves',
+    name: 'Mega Moves (60)',
+    description: '+60 extra moves',
+    emojis: '\uD83D\uDC8A\uD83D\uDC8A\uD83D\uDC8A',
+    price: 350,
     category: ShopCategory.powerUp,
   ),
   ShopItem(

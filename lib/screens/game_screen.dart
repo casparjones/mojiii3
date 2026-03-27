@@ -18,6 +18,24 @@ import '../game/obstacle_manager.dart';
 import '../game/save_system.dart';
 import '../game/score_calculator.dart';
 
+/// Temporary floating reward text shown above the board.
+class _FloatingReward {
+  final String text;
+  final double x;
+  final double y;
+  final DateTime createdAt;
+
+  _FloatingReward({
+    required this.text,
+    required this.x,
+    required this.y,
+  }) : createdAt = DateTime.now();
+
+  /// Whether this reward has expired (after 1.5 seconds).
+  bool get isExpired =>
+      DateTime.now().difference(createdAt).inMilliseconds > 1500;
+}
+
 class GameScreen extends StatefulWidget {
   /// Optional LevelConfig. If null, plays in free/endless mode.
   final LevelConfig? levelConfig;
@@ -38,6 +56,9 @@ class GameScreen extends StatefulWidget {
   /// Optional AudioManager for sound effects. If null, a default one is created.
   final AudioManager? audioManager;
 
+  /// Optional level number for farming rewards on 3-star replays.
+  final int? levelNumber;
+
   const GameScreen({
     super.key,
     this.levelConfig,
@@ -46,6 +67,7 @@ class GameScreen extends StatefulWidget {
     this.saveState,
     this.onPowerUpUsed,
     this.audioManager,
+    this.levelNumber,
   });
 
   @override
@@ -164,6 +186,18 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     _levelEnded = false;
     _maxCascade = 0;
     _coinsEarnedThisLevel = 0;
+    _matchCount = 0;
+    _farmingCoins = 0;
+    _farmingMoves = 0;
+    _floatingRewards.clear();
+
+    // Consume bonus moves at level start.
+    final saveState = widget.saveState;
+    if (saveState != null) {
+      saveState.regenerateMoves();
+      final bonus = saveState.consumeBonusMoves();
+      _movesRemaining += bonus;
+    }
   }
 
   void _onTileTap(int row, int col) {
@@ -235,7 +269,9 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     // Apply the swap.
     _board.swap(a, b);
     _movesUsed++;
-    _movesRemaining--;
+    if (!_isFarmingMode) {
+      _movesRemaining--;
+    }
     setState(() {});
 
     // Run cascade loop with obstacle processing.
@@ -290,6 +326,27 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       for (final m in matches) {
         _gemsCollectedByType[m.gemType] =
             (_gemsCollectedByType[m.gemType] ?? 0) + m.positions.length;
+      }
+
+      // Farming rewards for 3-star replays.
+      if (_isFarmingMode) {
+        _matchCount++;
+        if (_matchCount.isOdd) {
+          // Odd matches: +2 coins
+          _farmingCoins += 2;
+          if (widget.saveState != null) {
+            widget.saveState!.coins += 2;
+          }
+          _addFloatingReward('+2\uD83E\uDE99', allMatchedPos);
+        } else {
+          // Even matches: +1 bonus move
+          _farmingMoves += 1;
+          if (widget.saveState != null) {
+            widget.saveState!.bonusMoves =
+                (widget.saveState!.bonusMoves + 1).clamp(0, SaveState.maxBonusMoves);
+          }
+          _addFloatingReward('+1\uD83D\uDC8A', allMatchedPos);
+        }
       }
 
       // Score this step.
@@ -582,6 +639,25 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                     const TextStyle(color: Colors.amberAccent, fontSize: 16),
               ),
             ],
+            if (won && (_farmingCoins > 0 || _farmingMoves > 0)) ...[
+              const SizedBox(height: 8),
+              const Text(
+                'Farming Bonus:',
+                style: TextStyle(color: Colors.white70, fontSize: 14),
+              ),
+              if (_farmingCoins > 0)
+                Text(
+                  '+$_farmingCoins \uD83E\uDE99 Coins',
+                  key: const Key('farming_coins_summary'),
+                  style: const TextStyle(color: Colors.amberAccent, fontSize: 14),
+                ),
+              if (_farmingMoves > 0)
+                Text(
+                  '+$_farmingMoves \uD83D\uDC8A Bonus Moves',
+                  key: const Key('farming_moves_summary'),
+                  style: const TextStyle(color: Colors.greenAccent, fontSize: 14),
+                ),
+            ],
             if (!won && widget.coinBalance != null) ...[
               const SizedBox(height: 8),
               Text(
@@ -706,8 +782,44 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     }
   }
 
+  // ---- Farming rewards state ----
+  int _matchCount = 0;
+  int _farmingCoins = 0;
+  int _farmingMoves = 0;
+  final List<_FloatingReward> _floatingRewards = [];
+
+  /// Whether the current level is a 3-star replay (farming mode).
+  bool get _isFarmingMode {
+    final levelNum = widget.levelNumber;
+    if (levelNum == null) return false;
+    final saveState = widget.saveState;
+    if (saveState == null) return false;
+    return saveState.levelRecords[levelNum]?.bestStars == 3;
+  }
+
+  void _addFloatingReward(String text, Set<Position> positions) {
+    // Compute average position of matched gems for placement.
+    if (positions.isEmpty) return;
+    double avgRow = 0;
+    double avgCol = 0;
+    for (final p in positions) {
+      avgRow += p.row;
+      avgCol += p.col;
+    }
+    avgRow /= positions.length;
+    avgCol /= positions.length;
+    _floatingRewards.add(_FloatingReward(
+      text: text,
+      x: avgCol / _cols,
+      y: avgRow / _rows,
+    ));
+    // Clean up expired rewards.
+    _floatingRewards.removeWhere((r) => r.isExpired);
+  }
+
   // ---- Power-Up IDs ----
   static const String powerUpExtraMoves = 'powerup_extra_moves';
+  static const String powerUpMegaMoves = 'powerup_mega_moves';
   static const String powerUpShuffle = 'powerup_shuffle';
   static const String powerUpColorBomb = 'powerup_color_bomb';
 
@@ -716,13 +828,24 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     return widget.saveState?.powerUpCount(powerUpId) ?? 0;
   }
 
-  /// Use the Extra Moves power-up: adds 5 moves.
+  /// Use the Extra Moves power-up: adds 20 moves.
   void _useExtraMoves() {
     if (_processing || _levelEnded) return;
     final saveState = widget.saveState;
     if (saveState == null || !saveState.usePowerUp(powerUpExtraMoves)) return;
     setState(() {
-      _movesRemaining += 5;
+      _movesRemaining += 20;
+    });
+    widget.onPowerUpUsed?.call();
+  }
+
+  /// Use the Mega Moves power-up: adds 60 moves.
+  void _useMegaMoves() {
+    if (_processing || _levelEnded) return;
+    final saveState = widget.saveState;
+    if (saveState == null || !saveState.usePowerUp(powerUpMegaMoves)) return;
+    setState(() {
+      _movesRemaining += 60;
     });
     widget.onPowerUpUsed?.call();
   }
@@ -897,6 +1020,7 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
               ],
             ),
             if (_comboText != null) _buildComboOverlay(),
+            ..._buildFloatingRewards(),
           ],
         ),
       ),
@@ -990,9 +1114,9 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  const Text(
-                    'MOVES LEFT',
-                    style: TextStyle(
+                  Text(
+                    _isFarmingMode ? 'FARMING' : 'MOVES LEFT',
+                    style: const TextStyle(
                       color: Colors.white54,
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
@@ -1000,11 +1124,13 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                     ),
                   ),
                   Text(
-                    '$_movesRemaining',
+                    _isFarmingMode ? '\u221E' : '$_movesRemaining',
                     style: TextStyle(
-                      color: _movesRemaining <= 5
-                          ? Colors.redAccent
-                          : Colors.white,
+                      color: _isFarmingMode
+                          ? Colors.amberAccent
+                          : _movesRemaining <= 5
+                              ? Colors.redAccent
+                              : Colors.white,
                       fontSize: 28,
                       fontWeight: FontWeight.bold,
                     ),
@@ -1135,6 +1261,37 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
         ),
       ),
     );
+  }
+
+  List<Widget> _buildFloatingRewards() {
+    // Remove expired rewards.
+    _floatingRewards.removeWhere((r) => r.isExpired);
+    return _floatingRewards.map((reward) {
+      final age = DateTime.now().difference(reward.createdAt).inMilliseconds;
+      final opacity = (1.0 - age / 1500.0).clamp(0.0, 1.0);
+      final yOffset = age * 0.03; // Float upward
+      return Positioned(
+        left: 0,
+        right: 0,
+        top: 120 + (reward.y * 200) - yOffset,
+        child: Center(
+          child: Opacity(
+            opacity: opacity,
+            child: Text(
+              reward.text,
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.amberAccent,
+                shadows: [
+                  Shadow(color: Colors.black, blurRadius: 4),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }).toList();
   }
 
   Widget _buildBoard() {
@@ -1471,6 +1628,7 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
 
   Widget _buildPowerUpBar() {
     final extraMovesCount = _powerUpCount(powerUpExtraMoves);
+    final megaMovesCount = _powerUpCount(powerUpMegaMoves);
     final shuffleCount = _powerUpCount(powerUpShuffle);
     final colorBombCount = _powerUpCount(powerUpColorBomb);
     final disabled = _processing || _levelEnded;
@@ -1480,9 +1638,15 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       children: [
         _buildPowerUpButton(
           key: const Key('powerup_extra_moves_btn'),
-          emoji: '\uD83D\uDC8A+5',
+          emoji: '\uD83D\uDC8A+20',
           count: extraMovesCount,
           onTap: disabled || extraMovesCount <= 0 ? null : _useExtraMoves,
+        ),
+        _buildPowerUpButton(
+          key: const Key('powerup_mega_moves_btn'),
+          emoji: '\uD83D\uDC8A+60',
+          count: megaMovesCount,
+          onTap: disabled || megaMovesCount <= 0 ? null : _useMegaMoves,
         ),
         _buildPowerUpButton(
           key: const Key('powerup_shuffle_btn'),

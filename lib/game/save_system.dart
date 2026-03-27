@@ -165,6 +165,12 @@ class SaveState {
   /// The ID of the currently selected emoji theme.
   String selectedThemeId;
 
+  /// Bonus moves accumulated over time (max 10).
+  int bonusMoves;
+
+  /// Last time bonus moves were regenerated.
+  DateTime? lastMoveRegenTime;
+
   SaveState({
     this.currentLevel = 1,
     this.coins = 0,
@@ -176,10 +182,50 @@ class SaveState {
     Map<String, int>? powerUpInventory,
     this.tutorialShown = false,
     this.selectedThemeId = 'theme_fruit',
+    this.bonusMoves = 0,
+    this.lastMoveRegenTime,
   })  : stats = stats ?? PlayerStats(),
         levelRecords = levelRecords ?? {},
         unlockedExtras = unlockedExtras ?? {},
         powerUpInventory = powerUpInventory ?? {};
+
+  /// Maximum bonus moves that can be stored.
+  static const int maxBonusMoves = 10;
+
+  /// Interval between bonus move regenerations.
+  static const Duration regenInterval = Duration(minutes: 10);
+
+  /// Regenerate bonus moves based on elapsed time.
+  /// Returns the number of moves regenerated.
+  int regenerateMoves() {
+    final now = DateTime.now();
+    final lastRegen = lastMoveRegenTime ?? now;
+
+    if (lastMoveRegenTime == null) {
+      lastMoveRegenTime = now;
+      return 0;
+    }
+
+    final elapsed = now.difference(lastRegen);
+    final intervals = elapsed.inMinutes ~/ 10;
+
+    if (intervals <= 0) return 0;
+
+    final movesToAdd = intervals.clamp(0, maxBonusMoves - bonusMoves);
+    bonusMoves = (bonusMoves + movesToAdd).clamp(0, maxBonusMoves);
+
+    // Advance lastMoveRegenTime by the consumed intervals.
+    lastMoveRegenTime = lastRegen.add(Duration(minutes: intervals * 10));
+
+    return movesToAdd;
+  }
+
+  /// Consume all stored bonus moves and return the count consumed.
+  int consumeBonusMoves() {
+    final consumed = bonusMoves;
+    bonusMoves = 0;
+    return consumed;
+  }
 
   /// Whether a given level is unlocked.
   bool isLevelUnlocked(int level) => level <= currentLevel;
@@ -304,6 +350,8 @@ class SaveState {
         'powerUpInventory': powerUpInventory,
         'tutorialShown': tutorialShown,
         'selectedThemeId': selectedThemeId,
+        'bonusMoves': bonusMoves,
+        'lastMoveRegenTime': lastMoveRegenTime?.toIso8601String(),
       };
 
   /// Serialize to JSON string.
@@ -342,6 +390,10 @@ class SaveState {
       powerUpInventory: powerUpInventory,
       tutorialShown: json['tutorialShown'] as bool? ?? false,
       selectedThemeId: json['selectedThemeId'] as String? ?? 'theme_fruit',
+      bonusMoves: json['bonusMoves'] as int? ?? 0,
+      lastMoveRegenTime: json['lastMoveRegenTime'] != null
+          ? DateTime.tryParse(json['lastMoveRegenTime'] as String)
+          : null,
     );
   }
 

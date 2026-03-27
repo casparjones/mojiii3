@@ -29,12 +29,20 @@ class _LevelSelectScreenState extends State<LevelSelectScreen> {
 
     final config = gsm.generateLevel(levelNumber);
 
+    // Regenerate bonus moves before starting a level.
+    gsm.regenerateMoves();
+
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => GameScreen(
           levelConfig: config,
           coinBalance: gsm.coins,
+          saveState: gsm.saveState,
+          levelNumber: levelNumber,
+          onPowerUpUsed: () {
+            gsm.persistState();
+          },
           onLevelEnd: (won, score, stars, coinsEarned) {
             if (won) {
               gsm.recordLevelComplete(

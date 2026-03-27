@@ -26,7 +26,7 @@ void main() {
       expect(find.text('x3'), findsOneWidget);
     });
 
-    testWidgets('extra moves adds 5 to movesRemaining in level mode',
+    testWidgets('extra moves adds 20 to movesRemaining in level mode',
         (tester) async {
       final saveState = SaveState();
       saveState.addPowerUp('powerup_extra_moves', count: 1);
@@ -49,7 +49,7 @@ void main() {
       await tester.tap(find.byKey(const Key('powerup_extra_moves_btn')));
       await tester.pumpAndSettle();
 
-      expect(key.currentState!.movesRemaining, initialMoves + 5);
+      expect(key.currentState!.movesRemaining, initialMoves + 20);
       expect(saveState.powerUpCount('powerup_extra_moves'), 0);
     });
 
@@ -127,7 +127,8 @@ void main() {
 
       expect(find.text('x5'), findsOneWidget);
       expect(find.text('x10'), findsOneWidget);
-      expect(find.text('x0'), findsOneWidget);
+      // x0 appears for both color_bomb (0) and mega_moves (0)
+      expect(find.text('x0'), findsNWidgets(2));
     });
 
     testWidgets('tapping disabled power-up button does not crash',

@@ -44,7 +44,7 @@ void main() {
       expect(find.byKey(const Key('powerup_color_bomb_btn')), findsNothing);
     });
 
-    testWidgets('extra moves power-up adds 5 moves', (tester) async {
+    testWidgets('extra moves power-up adds 20 moves', (tester) async {
       final saveState = SaveState();
       saveState.addPowerUp('powerup_extra_moves', count: 1);
 
@@ -69,7 +69,7 @@ void main() {
       await tester.tap(find.byKey(const Key('powerup_extra_moves_btn')));
       await tester.pumpAndSettle();
 
-      expect(state.movesRemaining, initialMoves + 5);
+      expect(state.movesRemaining, initialMoves + 20);
       expect(saveState.powerUpCount('powerup_extra_moves'), 0);
       expect(powerUpUsedCalled, true);
     });
