@@ -98,6 +98,8 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   Set<Position> _hintPositions = {};
   Set<Position> _matchedPositions = {};
   String? _comboText;
+  double _comboX = 0.5;
+  double _comboY = 0.5;
   bool _levelEnded = false;
   int _maxCascade = 0;
   int _coinsEarnedThisLevel = 0;
@@ -198,6 +200,9 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       final bonus = saveState.consumeBonusMoves();
       _movesRemaining += bonus;
     }
+
+    // Ensure music resumes when (re)starting a level.
+    _musicManager?.resume();
   }
 
   void _onTileTap(int row, int col) {
@@ -269,7 +274,7 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     // Apply the swap.
     _board.swap(a, b);
     _movesUsed++;
-    if (!_isFarmingMode) {
+    if (!_isFarmingMode && _movesRemaining > 0) {
       _movesRemaining--;
     }
     setState(() {});
@@ -294,12 +299,12 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       setState(() {});
     }
 
-    // Check level end conditions.
+    // Check level end conditions (after cascade completes).
     if (_isLevelMode && !_levelEnded) {
       _checkLevelEnd();
     }
 
-    // Check free mode game over (out of moves).
+    // Check free mode game over (out of moves, after cascade completes).
     if (!_isLevelMode && !_levelEnded && _movesRemaining <= 0) {
       _endFreeMode();
     }
@@ -412,7 +417,20 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       }
 
       if (cascadeLevel > 1) {
-        _showComboToast('${cascadeLevel}x Combo!');
+        // Compute average position of all matched gems for combo placement.
+        double comboAvgCol = 0;
+        double comboAvgRow = 0;
+        for (final p in allMatchedPos) {
+          comboAvgCol += p.col;
+          comboAvgRow += p.row;
+        }
+        comboAvgCol /= allMatchedPos.length;
+        comboAvgRow /= allMatchedPos.length;
+        _showComboToast(
+          '${cascadeLevel}x Combo!',
+          x: comboAvgCol / _cols,
+          y: comboAvgRow / _rows,
+        );
       }
     }
 
@@ -441,10 +459,12 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     _comboText = null;
   }
 
-  void _showComboToast(String text) {
+  void _showComboToast(String text, {double x = 0.5, double y = 0.5}) {
     _comboFadeOutTimer?.cancel();
     setState(() {
       _comboText = text;
+      _comboX = x;
+      _comboY = y;
     });
     _comboAnimController.forward(from: 0.0);
     _comboFadeOutTimer = Timer(const Duration(milliseconds: 1500), () {
@@ -694,6 +714,7 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
               key: const Key('back_to_level_select_btn'),
               onPressed: () {
                 Navigator.of(ctx).pop();
+                _musicManager?.resume();
                 Navigator.of(context).pop();
               },
               child: const Text(
@@ -705,6 +726,7 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
             TextButton(
               onPressed: () {
                 Navigator.of(ctx).pop();
+                _musicManager?.resume();
                 Navigator.of(context).maybePop();
               },
               child: const Text(
@@ -1019,8 +1041,6 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                 _buildFooter(),
               ],
             ),
-            if (_comboText != null) _buildComboOverlay(),
-            ..._buildFloatingRewards(),
           ],
         ),
       ),
@@ -1231,13 +1251,17 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildComboOverlay() {
+  Widget _buildComboOverlay(double boardWidth, double boardHeight) {
     final animValue = _comboAnimController.value;
+    // Float upward as the animation progresses.
+    final yOffset = (1.0 - animValue) * 20;
+    final comboLeft = _comboX * boardWidth;
+    final comboTop = _comboY * boardHeight - yOffset;
     return Positioned(
-      top: 100,
-      left: 0,
-      right: 0,
-      child: Center(
+      left: comboLeft - 60,
+      top: comboTop - 20,
+      width: 120,
+      child: IgnorePointer(
         child: Opacity(
           opacity: animValue.clamp(0.0, 1.0),
           child: Transform.scale(
@@ -1250,6 +1274,7 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
               ),
               child: Text(
                 _comboText!,
+                textAlign: TextAlign.center,
                 style: const TextStyle(
                   color: Colors.amberAccent,
                   fontSize: 22,
@@ -1263,7 +1288,7 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     );
   }
 
-  List<Widget> _buildFloatingRewards() {
+  List<Widget> _buildFloatingRewards(double boardWidth, double boardHeight) {
     // Remove expired rewards.
     _floatingRewards.removeWhere((r) => r.isExpired);
     return _floatingRewards.map((reward) {
@@ -1271,14 +1296,15 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       final opacity = (1.0 - age / 1500.0).clamp(0.0, 1.0);
       final yOffset = age * 0.03; // Float upward
       return Positioned(
-        left: 0,
-        right: 0,
-        top: 120 + (reward.y * 200) - yOffset,
-        child: Center(
+        left: reward.x * boardWidth - 30,
+        top: reward.y * boardHeight - yOffset,
+        width: 60,
+        child: IgnorePointer(
           child: Opacity(
             opacity: opacity,
             child: Text(
               reward.text,
+              textAlign: TextAlign.center,
               style: const TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
@@ -1309,13 +1335,19 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
             borderRadius: BorderRadius.circular(12),
             child: LayoutBuilder(
               builder: (context, constraints) {
-                final cellW = constraints.maxWidth / _cols;
-                final cellH = constraints.maxHeight / _rows;
+                final boardWidth = constraints.maxWidth;
+                final boardHeight = constraints.maxHeight;
+                final cellW = boardWidth / _cols;
+                final cellH = boardHeight / _rows;
                 return Stack(
+                  clipBehavior: Clip.none,
                   children: [
                     ..._buildGridBackground(cellW, cellH),
                     ..._buildObstacleTiles(cellW, cellH),
                     ..._buildGemTiles(cellW, cellH),
+                    if (_comboText != null)
+                      _buildComboOverlay(boardWidth, boardHeight),
+                    ..._buildFloatingRewards(boardWidth, boardHeight),
                   ],
                 );
               },

@@ -17,12 +17,12 @@ void main() {
     testWidgets('renders with default SaveState when none provided',
         (tester) async {
       await tester.pumpWidget(createApp());
-      // Should not crash and show level 1 on New Levels tab
-      expect(find.text('1'), findsOneWidget);
+      // Should not crash. With 0 bonus moves, level 1 shows "Keine Moves".
+      expect(find.text('Keine Moves'), findsOneWidget);
     });
 
     testWidgets('renders with totalLevels = 1', (tester) async {
-      final save = SaveState(currentLevel: 1);
+      final save = SaveState(currentLevel: 1, bonusMoves: 5);
       await tester.pumpWidget(createApp(saveState: save, totalLevels: 1));
       expect(find.text('1'), findsOneWidget);
       // No lock icons since the only level is unlocked
@@ -30,14 +30,14 @@ void main() {
     });
 
     testWidgets('all levels unlocked shows no lock icons', (tester) async {
-      final save = SaveState(currentLevel: 8);
+      final save = SaveState(currentLevel: 8, bonusMoves: 5);
       await tester.pumpWidget(createApp(saveState: save, totalLevels: 8));
       expect(find.text('\u{1F512}'), findsNothing);
     });
 
     testWidgets('level with 0 stars shows 3 empty stars on New Levels tab',
         (tester) async {
-      final save = SaveState(currentLevel: 2);
+      final save = SaveState(currentLevel: 2, bonusMoves: 5);
       // Level 1 and 2 are unlocked, no completions
       await tester.pumpWidget(createApp(saveState: save, totalLevels: 4));
 
@@ -63,7 +63,7 @@ void main() {
     });
 
     testWidgets('highscore of 0 is not displayed', (tester) async {
-      final save = SaveState(currentLevel: 2);
+      final save = SaveState(currentLevel: 2, bonusMoves: 5);
       // Level 1 unlocked but no record, so highScore = 0
       await tester.pumpWidget(createApp(saveState: save, totalLevels: 2));
 
@@ -110,7 +110,7 @@ void main() {
 
     testWidgets('tapping unlocked level without record navigates',
         (tester) async {
-      final save = SaveState(currentLevel: 2);
+      final save = SaveState(currentLevel: 2, bonusMoves: 5);
       // Level 2 is unlocked but has no record - on New Levels tab
       await tester.pumpWidget(createApp(saveState: save, totalLevels: 4));
 
@@ -138,7 +138,7 @@ void main() {
 
     testWidgets('New Levels tab shows unlocked uncompleted levels',
         (tester) async {
-      final save = SaveState(currentLevel: 4);
+      final save = SaveState(currentLevel: 4, bonusMoves: 5);
       save.levelRecord(1).recordCompletion(score: 100, stars: 1);
       save.levelRecord(2).recordCompletion(score: 200, stars: 2);
       // Level 3, 4 unlocked but not completed

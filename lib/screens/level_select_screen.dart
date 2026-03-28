@@ -23,9 +23,32 @@ class LevelSelectScreen extends StatefulWidget {
 class _LevelSelectScreenState extends State<LevelSelectScreen> {
   GameStateManager get _gsm => GameStateManagerProvider.read(context);
 
+  /// Whether the player has any moves available (bonus moves or extra-moves
+  /// power-ups). The level's own moveLimit is always granted, but bonus moves
+  /// come from regeneration / power-ups.
+  bool _hasAvailableMoves(GameStateManager gsm) {
+    gsm.regenerateMoves();
+    final bonus = gsm.saveState.bonusMoves;
+    final extraMovesPowerUp =
+        gsm.saveState.powerUpCount('powerup_extra_moves');
+    return bonus > 0 || extraMovesPowerUp > 0;
+  }
+
+  /// Whether a level is already completed (has stars > 0).
+  bool _isCompleted(GameStateManager gsm, int levelNumber) {
+    final record = gsm.levelRecords[levelNumber];
+    return (record?.bestStars ?? 0) > 0;
+  }
+
   void _onLevelTap(int levelNumber) {
     final gsm = _gsm;
     if (!gsm.isLevelUnlocked(levelNumber)) return;
+
+    // Block new (not yet completed) levels if the player has no moves.
+    if (!_isCompleted(gsm, levelNumber) && !_hasAvailableMoves(gsm)) {
+      _showNoMovesHint();
+      return;
+    }
 
     final config = gsm.generateLevel(levelNumber);
 
@@ -63,6 +86,15 @@ class _LevelSelectScreenState extends State<LevelSelectScreen> {
             }
           },
         ),
+      ),
+    );
+  }
+
+  void _showNoMovesHint() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Keine Moves! Farme Moves in abgeschlossenen Leveln!'),
+        duration: Duration(seconds: 3),
       ),
     );
   }
@@ -197,6 +229,9 @@ class _LevelSelectScreenState extends State<LevelSelectScreen> {
     final record = gsm.levelRecords[levelNumber];
     final stars = record?.bestStars ?? 0;
     final highScore = record?.highScore ?? 0;
+    final completed = stars > 0;
+    // New levels are blocked when the player has no moves.
+    final noMoves = unlocked && !completed && !_hasAvailableMoves(gsm);
 
     return GestureDetector(
       key: Key('level_tile_$levelNumber'),
@@ -204,15 +239,17 @@ class _LevelSelectScreenState extends State<LevelSelectScreen> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         decoration: BoxDecoration(
-          color: unlocked
+          color: unlocked && !noMoves
               ? const Color(0xFF16213e)
               : const Color(0xFF0f0f1a),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: unlocked
-                ? (stars > 0
-                    ? Colors.amber.withValues(alpha: 0.5)
-                    : Colors.white24)
+                ? (noMoves
+                    ? Colors.redAccent.withValues(alpha: 0.4)
+                    : stars > 0
+                        ? Colors.amber.withValues(alpha: 0.5)
+                        : Colors.white24)
                 : Colors.white10,
             width: 1.5,
           ),
@@ -230,7 +267,20 @@ class _LevelSelectScreenState extends State<LevelSelectScreen> {
           children: [
             if (!unlocked)
               const Text('\u{1F512}', style: TextStyle(fontSize: 24))
-            else ...[
+            else if (noMoves) ...[
+              const Text('\u{1F512}', style: TextStyle(fontSize: 24)),
+              const SizedBox(height: 2),
+              const Text(
+                'Keine Moves',
+                key: Key('no_moves_hint'),
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.redAccent,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ] else ...[
               Text(
                 '$levelNumber',
                 style: TextStyle(

@@ -26,13 +26,16 @@ void main() {
     });
 
     testWidgets('displays level tiles', (tester) async {
-      await tester.pumpWidget(createApp(totalLevels: 8));
+      await tester.pumpWidget(createApp(
+        saveState: SaveState(bonusMoves: 5),
+        totalLevels: 8,
+      ));
       // Level 1 should be visible on New Levels tab
       expect(find.text('1'), findsOneWidget);
     });
 
     testWidgets('first level is unlocked by default', (tester) async {
-      final save = SaveState(currentLevel: 1);
+      final save = SaveState(currentLevel: 1, bonusMoves: 5);
       await tester.pumpWidget(createApp(saveState: save, totalLevels: 4));
 
       // Level 1 should show its number (unlocked) on New Levels tab
@@ -41,7 +44,7 @@ void main() {
 
     testWidgets('locked level preview shows lock emoji on New Levels tab',
         (tester) async {
-      final save = SaveState(currentLevel: 1);
+      final save = SaveState(currentLevel: 1, bonusMoves: 5);
       await tester.pumpWidget(createApp(saveState: save, totalLevels: 4));
 
       // Only the first locked level (2) shows as preview
@@ -80,7 +83,7 @@ void main() {
 
     testWidgets('tapping unlocked level navigates to GameScreen',
         (tester) async {
-      final save = SaveState(currentLevel: 2);
+      final save = SaveState(currentLevel: 2, bonusMoves: 5);
       await tester.pumpWidget(createApp(saveState: save, totalLevels: 4));
 
       await tester.tap(find.byKey(const Key('level_tile_1')));
