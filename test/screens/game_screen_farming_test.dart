@@ -103,16 +103,16 @@ void main() {
       final saveState = SaveState(bonusMoves: 3);
 
       saveState.bonusMoves =
-          (saveState.bonusMoves + 1).clamp(0, SaveState.maxBonusMoves);
+          (saveState.bonusMoves + 1).clamp(0, saveState.maxBonusMoves);
       expect(saveState.bonusMoves, 4);
     });
 
     test('farming moves do not exceed maxBonusMoves', () {
-      final saveState = SaveState(bonusMoves: 10);
+      final saveState = SaveState(bonusMoves: 60);
 
       saveState.bonusMoves =
-          (saveState.bonusMoves + 1).clamp(0, SaveState.maxBonusMoves);
-      expect(saveState.bonusMoves, 10);
+          (saveState.bonusMoves + 1).clamp(0, saveState.maxBonusMoves);
+      expect(saveState.bonusMoves, 60);
     });
   });
 }

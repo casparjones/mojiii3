@@ -22,40 +22,40 @@ void main() {
       expect(save.lastMoveRegenTime, isNotNull);
     });
 
-    test('regenerateMoves adds 1 move per 10 minutes', () {
+    test('regenerateMoves adds 1 move per 5 minutes', () {
       final save = SaveState();
       save.lastMoveRegenTime = DateTime.now().subtract(
-        const Duration(minutes: 30),
+        const Duration(minutes: 15),
       );
       final result = save.regenerateMoves();
       expect(result, 3);
       expect(save.bonusMoves, 3);
     });
 
-    test('regenerateMoves caps at maxBonusMoves (10)', () {
+    test('regenerateMoves caps at maxBonusMoves (60)', () {
       final save = SaveState();
       save.lastMoveRegenTime = DateTime.now().subtract(
-        const Duration(hours: 5),
+        const Duration(hours: 10),
       );
       final result = save.regenerateMoves();
-      expect(result, 10);
-      expect(save.bonusMoves, 10);
+      expect(result, 60);
+      expect(save.bonusMoves, 60);
     });
 
     test('regenerateMoves respects existing bonusMoves', () {
-      final save = SaveState(bonusMoves: 8);
+      final save = SaveState(bonusMoves: 58);
       save.lastMoveRegenTime = DateTime.now().subtract(
-        const Duration(minutes: 50),
+        const Duration(minutes: 25),
       );
       final result = save.regenerateMoves();
-      expect(result, 2); // Can only add 2 more (8 + 2 = 10)
-      expect(save.bonusMoves, 10);
+      expect(result, 2); // Can only add 2 more (58 + 2 = 60)
+      expect(save.bonusMoves, 60);
     });
 
-    test('regenerateMoves returns 0 if less than 10 minutes elapsed', () {
+    test('regenerateMoves returns 0 if less than 5 minutes elapsed', () {
       final save = SaveState();
       save.lastMoveRegenTime = DateTime.now().subtract(
-        const Duration(minutes: 5),
+        const Duration(minutes: 4),
       );
       final result = save.regenerateMoves();
       expect(result, 0);
@@ -63,13 +63,13 @@ void main() {
     });
 
     test('regenerateMoves returns 0 if already at max', () {
-      final save = SaveState(bonusMoves: 10);
+      final save = SaveState(bonusMoves: 60);
       save.lastMoveRegenTime = DateTime.now().subtract(
         const Duration(minutes: 30),
       );
       final result = save.regenerateMoves();
       expect(result, 0);
-      expect(save.bonusMoves, 10);
+      expect(save.bonusMoves, 60);
     });
 
     test('consumeBonusMoves returns count and resets to 0', () {

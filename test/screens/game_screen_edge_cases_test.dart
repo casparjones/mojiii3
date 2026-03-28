@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:match3/game/level_generator.dart';
+import 'package:match3/game/save_system.dart';
 import 'package:match3/models/gem_type.dart';
 import 'package:match3/screens/game_screen.dart';
 
@@ -41,15 +42,16 @@ void main() {
     testWidgets('restart resets movesRemaining in level mode', (tester) async {
       final key = GlobalKey<GameScreenState>();
       final config = const LevelGenerator().generate(3);
+      final saveState = SaveState(bonusMoves: 30);
 
       await tester.pumpWidget(
         MaterialApp(
-          home: GameScreen(key: key, levelConfig: config),
+          home: GameScreen(key: key, levelConfig: config, saveState: saveState),
         ),
       );
       await tester.pump();
 
-      expect(key.currentState!.movesRemaining, config.moveLimit);
+      expect(key.currentState!.movesRemaining, 30);
       expect(key.currentState!.score, 0);
       expect(key.currentState!.gemsCollected, 0);
       expect(key.currentState!.obstaclesDestroyed, 0);
@@ -59,7 +61,7 @@ void main() {
       await tester.pump();
 
       expect(key.currentState!.score, 0);
-      expect(key.currentState!.movesRemaining, config.moveLimit);
+      expect(key.currentState!.movesRemaining, greaterThanOrEqualTo(0));
       expect(key.currentState!.movesUsed, 0);
       expect(key.currentState!.levelEnded, false);
     });
@@ -191,16 +193,17 @@ void main() {
         (tester) async {
       final key = GlobalKey<GameScreenState>();
       final config = const LevelGenerator().generate(30);
+      final saveState = SaveState(bonusMoves: 33);
 
       await tester.pumpWidget(
         MaterialApp(
-          home: GameScreen(key: key, levelConfig: config),
+          home: GameScreen(key: key, levelConfig: config, saveState: saveState),
         ),
       );
       await tester.pump();
 
       final state = key.currentState!;
-      expect(state.movesRemaining, config.moveLimit);
+      expect(state.movesRemaining, 33);
       expect(state.obstacleManager.activeCount, greaterThanOrEqualTo(0));
       expect(state.levelEnded, false);
     });

@@ -64,9 +64,10 @@ void main() {
       expect(find.text('Color Bomb'), findsOneWidget);
     });
 
-    testWidgets('fruit theme shows Free button', (tester) async {
+    testWidgets('fruit theme shows Active since it is the default theme', (tester) async {
       await tester.pumpWidget(createApp());
-      expect(find.text('Free'), findsOneWidget);
+      // Fruit theme is always owned and active by default
+      expect(find.text('Active \u2713'), findsOneWidget);
     });
 
     testWidgets('animal theme shows price 500', (tester) async {
@@ -76,7 +77,11 @@ void main() {
 
     testWidgets('space theme shows price 1000', (tester) async {
       await tester.pumpWidget(createApp());
-      expect(find.text('1000'), findsOneWidget);
+      final spaceCard = find.byKey(const Key('shop_item_theme_space'));
+      expect(
+        find.descendant(of: spaceCard, matching: find.text('1000')),
+        findsOneWidget,
+      );
     });
 
     testWidgets('tapping paid item shows confirmation dialog', (tester) async {
@@ -92,7 +97,7 @@ void main() {
       expect(find.text('Buy'), findsOneWidget);
     });
 
-    testWidgets('confirming purchase deducts coins and shows Owned',
+    testWidgets('confirming purchase deducts coins and shows Use',
         (tester) async {
       final save = SaveState(coins: 600);
       await tester.pumpWidget(createApp(saveState: save));
@@ -109,8 +114,8 @@ void main() {
 
       // Coins should be deducted
       expect(find.text('100'), findsOneWidget); // 600 - 500
-      // Item should show Owned
-      expect(find.text('Owned'), findsOneWidget);
+      // Purchased theme is owned but not active, so it shows "Use"
+      expect(find.text('Use'), findsOneWidget);
     });
 
     testWidgets('purchase fails with not enough coins', (tester) async {
@@ -131,25 +136,30 @@ void main() {
       expect(save.coins, 100);
     });
 
-    testWidgets('free item can be claimed without dialog', (tester) async {
+    testWidgets('fruit theme is always owned by default', (tester) async {
       final save = SaveState();
       await tester.pumpWidget(createApp(saveState: save));
 
-      // Tap Free button for fruit theme
-      await tester.tap(find.text('Free'));
-      await tester.pumpAndSettle();
-
-      // Should now show Owned (no dialog for free items)
-      expect(find.text('Owned'), findsOneWidget);
-      expect(save.isExtraUnlocked('theme_fruit'), isTrue);
+      // Fruit theme is always treated as owned and is the default active theme
+      // so it shows "Active ✓" rather than "Free"
+      final fruitCard = find.byKey(const Key('shop_item_theme_fruit'));
+      expect(
+        find.descendant(of: fruitCard, matching: find.text('Active \u2713')),
+        findsOneWidget,
+      );
     });
 
-    testWidgets('already owned items show Owned label', (tester) async {
+    testWidgets('already owned non-active theme shows Use button', (tester) async {
       final save = SaveState(coins: 1000);
       save.unlockExtra('theme_animals');
       await tester.pumpWidget(createApp(saveState: save));
 
-      expect(find.text('Owned'), findsOneWidget);
+      // Animal theme is owned but not the active theme, so it shows "Use"
+      final animalCard = find.byKey(const Key('shop_item_theme_animals'));
+      expect(
+        find.descendant(of: animalCard, matching: find.text('Use')),
+        findsOneWidget,
+      );
     });
 
     testWidgets('shows back button', (tester) async {

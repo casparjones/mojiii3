@@ -22,7 +22,7 @@ class ShopItem {
   });
 }
 
-enum ShopCategory { theme, powerUp }
+enum ShopCategory { theme, powerUp, movesUpgrade }
 
 /// All available shop items.
 const List<ShopItem> shopThemes = [
@@ -56,16 +56,16 @@ const List<ShopItem> shopPowerUps = [
   ShopItem(
     id: 'powerup_extra_moves',
     name: 'Extra Moves (20)',
-    description: '+20 extra moves',
-    emojis: '➕5️⃣',
+    description: '\uD83D\uDC8A +20 Zuege im Spiel aktivieren',
+    emojis: '\uD83D\uDC8A',
     price: 200,
     category: ShopCategory.powerUp,
   ),
   ShopItem(
     id: 'powerup_mega_moves',
     name: 'Mega Moves (60)',
-    description: '+60 extra moves',
-    emojis: '\uD83D\uDC8A\uD83D\uDC8A\uD83D\uDC8A',
+    description: '\uD83D\uDC8A +60 Zuege im Spiel aktivieren',
+    emojis: '\uD83D\uDC8A',
     price: 350,
     category: ShopCategory.powerUp,
   ),
@@ -84,6 +84,90 @@ const List<ShopItem> shopPowerUps = [
     emojis: '💣🌈',
     price: 300,
     category: ShopCategory.powerUp,
+  ),
+];
+
+/// Instant moves that are added directly to bonusMoves.
+class InstantMovesItem {
+  final String id;
+  final String name;
+  final String description;
+  final String emojis;
+  final int price;
+  final int movesAmount;
+
+  const InstantMovesItem({
+    required this.id,
+    required this.name,
+    required this.description,
+    required this.emojis,
+    required this.price,
+    required this.movesAmount,
+  });
+}
+
+const List<InstantMovesItem> shopInstantMoves = [
+  InstantMovesItem(
+    id: 'instant_moves_20',
+    name: '20 Zuege',
+    description: 'Sofort +20 Zuege',
+    emojis: '🚶',
+    price: 100,
+    movesAmount: 20,
+  ),
+  InstantMovesItem(
+    id: 'instant_moves_60',
+    name: '60 Zuege',
+    description: 'Sofort +60 Zuege',
+    emojis: '🏃',
+    price: 300,
+    movesAmount: 60,
+  ),
+];
+
+/// Upgrade packages for the moves maximum.
+class MovesUpgradeItem {
+  final String id;
+  final String name;
+  final String description;
+  final String emojis;
+  final int price;
+  final int targetMaxMoves;
+
+  const MovesUpgradeItem({
+    required this.id,
+    required this.name,
+    required this.description,
+    required this.emojis,
+    required this.price,
+    required this.targetMaxMoves,
+  });
+}
+
+const List<MovesUpgradeItem> shopMovesUpgrades = [
+  MovesUpgradeItem(
+    id: 'moves_upgrade_150',
+    name: 'Zuege-Maximum 150',
+    description: 'Maximum von 60 auf 150 Zuege erhoehen',
+    emojis: '🦶',
+    price: 1000,
+    targetMaxMoves: 150,
+  ),
+  MovesUpgradeItem(
+    id: 'moves_upgrade_400',
+    name: 'Zuege-Maximum 400',
+    description: 'Maximum auf 400 Zuege erhoehen',
+    emojis: '🏃',
+    price: 2000,
+    targetMaxMoves: 400,
+  ),
+  MovesUpgradeItem(
+    id: 'moves_upgrade_999',
+    name: 'Zuege-Maximum 999',
+    description: 'Maximum auf 999 Zuege erhoehen',
+    emojis: '🚀',
+    price: 5000,
+    targetMaxMoves: 999,
   ),
 ];
 
@@ -128,6 +212,16 @@ class ShopScreen extends StatelessWidget {
                     const SizedBox(height: 8),
                     ...shopThemes
                         .map((item) => _buildShopCard(context, gsm, item)),
+                    const SizedBox(height: 24),
+                    _buildSectionHeader('Zuege-Upgrades'),
+                    const SizedBox(height: 8),
+                    ...shopMovesUpgrades
+                        .map((item) => _buildMovesUpgradeCard(context, gsm, item)),
+                    const SizedBox(height: 24),
+                    _buildSectionHeader('Zuege kaufen'),
+                    const SizedBox(height: 8),
+                    ...shopInstantMoves
+                        .map((item) => _buildInstantMovesCard(context, gsm, item)),
                     const SizedBox(height: 24),
                     _buildSectionHeader('Power-Ups'),
                     const SizedBox(height: 8),
@@ -187,7 +281,7 @@ class ShopScreen extends StatelessWidget {
     // Free items unlock immediately
     if (item.price == 0) {
       gsm.saveState.unlockExtra(item.id);
-      gsm.notifyListeners();
+      gsm.persistState();
       return;
     }
 
@@ -224,8 +318,12 @@ class ShopScreen extends StatelessWidget {
 
   void _executePurchase(BuildContext context, GameStateManager gsm, ShopItem item) {
     if (gsm.spendCoins(item.price)) {
-      gsm.saveState.unlockExtra(item.id);
-      gsm.notifyListeners();
+      if (item.category == ShopCategory.powerUp) {
+        gsm.saveState.addPowerUp(item.id);
+      } else {
+        gsm.saveState.unlockExtra(item.id);
+      }
+      gsm.persistState();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('${item.name} purchased!'),
@@ -244,12 +342,363 @@ class ShopScreen extends StatelessWidget {
     }
   }
 
+  void _purchaseInstantMoves(BuildContext context, GameStateManager gsm, InstantMovesItem item) {
+    final save = gsm.saveState;
+    final currentMoves = save.bonusMoves;
+    final maxMoves = save.maxBonusMoves;
+    final space = maxMoves - currentMoves;
+    final effective = item.movesAmount.clamp(0, space);
+    final wasted = item.movesAmount - effective;
+
+    if (wasted > 0 && effective > 0) {
+      // Warn that some moves will be lost
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: const Color(0xFF16213e),
+          title: const Text('Achtung', style: TextStyle(color: Colors.white)),
+          content: Text(
+            'Du hast nur Platz fuer $effective Zuege (aktuell $currentMoves/$maxMoves). '
+            '$wasted Zuege wuerden verfallen. Trotzdem kaufen?',
+            style: const TextStyle(color: Colors.white70),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Abbrechen'),
+            ),
+            TextButton(
+              key: Key('confirm_purchase_${item.id}'),
+              onPressed: () {
+                Navigator.pop(ctx);
+                _executeInstantMovesPurchase(context, gsm, item, effective);
+              },
+              child: const Text('Trotzdem kaufen'),
+            ),
+          ],
+        ),
+      );
+    } else {
+      // Normal confirmation
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: const Color(0xFF16213e),
+          title: Text(
+            '${item.name} kaufen?',
+            style: const TextStyle(color: Colors.white),
+          ),
+          content: Text(
+            '${item.price} Muenzen fuer ${item.movesAmount} Zuege ausgeben?',
+            style: const TextStyle(color: Colors.white70),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Abbrechen'),
+            ),
+            TextButton(
+              key: Key('confirm_purchase_${item.id}'),
+              onPressed: () {
+                Navigator.pop(ctx);
+                _executeInstantMovesPurchase(context, gsm, item, effective);
+              },
+              child: const Text('Kaufen'),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
+  void _executeInstantMovesPurchase(
+      BuildContext context, GameStateManager gsm, InstantMovesItem item, int effective) {
+    if (gsm.spendCoins(item.price)) {
+      gsm.saveState.bonusMoves =
+          (gsm.saveState.bonusMoves + effective).clamp(0, gsm.saveState.maxBonusMoves);
+      gsm.persistState();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('+$effective Zuege!'),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Nicht genug Muenzen!'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
+  Widget _buildInstantMovesCard(BuildContext context, GameStateManager gsm, InstantMovesItem item) {
+    final currentMoves = gsm.saveState.bonusMoves;
+    final maxMoves = gsm.saveState.maxBonusMoves;
+    final isFull = currentMoves >= maxMoves;
+    final canAfford = gsm.coins >= item.price;
+    final enabled = !isFull && canAfford;
+
+    return Card(
+      key: Key('shop_item_${item.id}'),
+      color: const Color(0xFF16213e),
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Colors.white12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.05),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              alignment: Alignment.center,
+              child: Text(item.emojis, style: const TextStyle(fontSize: 28)),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.name,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    item.description,
+                    style: const TextStyle(color: Colors.white54, fontSize: 12),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Aktuell: $currentMoves/$maxMoves',
+                    style: const TextStyle(color: Colors.white38, fontSize: 11),
+                  ),
+                ],
+              ),
+            ),
+            if (isFull)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.grey.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Text(
+                  'Voll',
+                  style: TextStyle(color: Colors.white38, fontWeight: FontWeight.bold),
+                ),
+              )
+            else
+              GestureDetector(
+                onTap: enabled ? () => _purchaseInstantMoves(context, gsm, item) : null,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: canAfford
+                        ? Colors.amber.withValues(alpha: 0.8)
+                        : Colors.grey.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('\uD83E\uDE99', style: TextStyle(fontSize: 14)),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${item.price}',
+                        style: TextStyle(
+                          color: canAfford ? Colors.black87 : Colors.white38,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _purchaseMovesUpgrade(BuildContext context, GameStateManager gsm, MovesUpgradeItem item) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF16213e),
+        title: Text(
+          '${item.name} kaufen?',
+          style: const TextStyle(color: Colors.white),
+        ),
+        content: Text(
+          '${item.price} Muenzen ausgeben fuer ${item.name}?',
+          style: const TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Abbrechen'),
+          ),
+          TextButton(
+            key: Key('confirm_purchase_${item.id}'),
+            onPressed: () {
+              Navigator.pop(ctx);
+              if (gsm.spendCoins(item.price)) {
+                gsm.saveState.maxBonusMoves = item.targetMaxMoves;
+                gsm.persistState();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('${item.name} gekauft!'),
+                    backgroundColor: Colors.green,
+                    duration: const Duration(seconds: 2),
+                  ),
+                );
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Nicht genug Muenzen!'),
+                    backgroundColor: Colors.red,
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+              }
+            },
+            child: const Text('Kaufen'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMovesUpgradeCard(BuildContext context, GameStateManager gsm, MovesUpgradeItem item) {
+    final purchased = gsm.saveState.maxBonusMoves >= item.targetMaxMoves;
+    final canAfford = gsm.coins >= item.price;
+
+    return Card(
+      key: Key('shop_item_${item.id}'),
+      color: const Color(0xFF16213e),
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: purchased
+              ? Colors.green.withValues(alpha: 0.5)
+              : Colors.white12,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.05),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                item.emojis,
+                style: const TextStyle(fontSize: 28),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.name,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    item.description,
+                    style: const TextStyle(
+                      color: Colors.white54,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (purchased)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.green.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Text(
+                  'Gekauft',
+                  style: TextStyle(
+                    color: Colors.green,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              )
+            else
+              GestureDetector(
+                onTap: () => _purchaseMovesUpgrade(context, gsm, item),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: canAfford
+                        ? Colors.amber.withValues(alpha: 0.8)
+                        : Colors.grey.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('🪙', style: TextStyle(fontSize: 14)),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${item.price}',
+                        style: TextStyle(
+                          color: canAfford ? Colors.black87 : Colors.white38,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildShopCard(BuildContext context, GameStateManager gsm, ShopItem item) {
     final isTheme = item.category == ShopCategory.theme;
-    final owned = item.id == 'theme_fruit' ||
-        gsm.saveState.isExtraUnlocked(item.id);
+    final isPowerUp = item.category == ShopCategory.powerUp;
+    final owned = isTheme && (item.id == 'theme_fruit' ||
+        gsm.saveState.isExtraUnlocked(item.id));
     final isActive = isTheme && gsm.selectedThemeId == item.id;
     final canAfford = gsm.coins >= item.price;
+    final powerUpCount = isPowerUp ? gsm.saveState.powerUpCount(item.id) : 0;
 
     return Card(
       key: Key('shop_item_${item.id}'),
@@ -307,10 +756,20 @@ class ShopScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 2),
-                  Text(
-                    item.emojis,
-                    style: const TextStyle(fontSize: 14),
-                  ),
+                  if (isPowerUp && powerUpCount > 0)
+                    Text(
+                      'Inventar: $powerUpCount',
+                      style: const TextStyle(
+                        color: Colors.amberAccent,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    )
+                  else
+                    Text(
+                      item.emojis,
+                      style: const TextStyle(fontSize: 14),
+                    ),
                 ],
               ),
             ),

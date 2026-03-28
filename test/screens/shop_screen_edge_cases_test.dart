@@ -102,8 +102,12 @@ void main() {
       final save = SaveState(coins: 2000);
       await tester.pumpWidget(createApp(saveState: save));
 
-      // Buy animal theme (500)
-      await tester.tap(find.text('500'));
+      // Buy animal theme (500) using descendant finder
+      final animalCard = find.byKey(const Key('shop_item_theme_animals'));
+      await tester.tap(find.descendant(
+        of: animalCard,
+        matching: find.text('500'),
+      ));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('confirm_purchase')));
       await tester.pumpAndSettle();
@@ -111,8 +115,12 @@ void main() {
 
       expect(save.coins, 1500);
 
-      // Buy space theme (1000)
-      await tester.tap(find.text('1000'));
+      // Buy space theme (1000) using descendant finder to avoid ambiguity
+      final spaceCard = find.byKey(const Key('shop_item_theme_space'));
+      await tester.tap(find.descendant(
+        of: spaceCard,
+        matching: find.text('1000'),
+      ));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('confirm_purchase')));
       await tester.pumpAndSettle();
@@ -126,11 +134,30 @@ void main() {
     testWidgets('owned items do not show buy button', (tester) async {
       final save = SaveState(coins: 1000);
       save.unlockExtra('theme_animals');
-      save.unlockExtra('theme_fruit');
+      // theme_fruit is always owned by default
       await tester.pumpWidget(createApp(saveState: save));
 
-      // Two items show "Owned"
-      expect(find.text('Owned'), findsNWidgets(2));
+      // Fruit is the active theme -> shows "Active ✓"
+      final fruitCard = find.byKey(const Key('shop_item_theme_fruit'));
+      expect(
+        find.descendant(of: fruitCard, matching: find.text('Active \u2713')),
+        findsOneWidget,
+      );
+      // Animal is owned but not active -> shows "Use"
+      final animalCard = find.byKey(const Key('shop_item_theme_animals'));
+      expect(
+        find.descendant(of: animalCard, matching: find.text('Use')),
+        findsOneWidget,
+      );
+      // Neither should show a price button
+      expect(
+        find.descendant(of: fruitCard, matching: find.text('500')),
+        findsNothing,
+      );
+      expect(
+        find.descendant(of: animalCard, matching: find.text('500')),
+        findsNothing,
+      );
     });
 
     testWidgets('shop items have correct keys', (tester) async {
@@ -189,8 +216,8 @@ void main() {
         scrollable: find.byType(Scrollable).last,
       );
 
-      expect(find.text('+20 extra moves'), findsOneWidget);
-      expect(find.text('+60 extra moves'), findsOneWidget);
+      expect(find.text('\uD83D\uDC8A +20 Zuege im Spiel aktivieren'), findsOneWidget);
+      expect(find.text('\uD83D\uDC8A +60 Zuege im Spiel aktivieren'), findsOneWidget);
       expect(find.text('Shuffle the board'), findsOneWidget);
       expect(find.text('Destroy all of one color'), findsOneWidget);
     });

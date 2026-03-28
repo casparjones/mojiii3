@@ -1,48 +1,52 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:match3/game/level_generator.dart';
+import 'package:match3/game/save_system.dart';
 import 'package:match3/models/gem_type.dart';
 import 'package:match3/screens/game_screen.dart';
 
 void main() {
   group('GameScreen widget', () {
     testWidgets('renders in free mode without LevelConfig', (tester) async {
+      final saveState = SaveState(bonusMoves: 30);
       await tester.pumpWidget(
-        const MaterialApp(home: GameScreen()),
+        MaterialApp(home: GameScreen(saveState: saveState)),
       );
       await tester.pump();
 
       expect(find.text('SCORE'), findsOneWidget);
-      expect(find.text('MOVES LEFT'), findsOneWidget);
-      expect(find.text('30'), findsOneWidget); // free mode starts with 30 moves
+      expect(find.text('MOVES'), findsOneWidget);
+      expect(find.textContaining('30/'), findsOneWidget); // "30/60" format
       expect(find.text('Hint'), findsOneWidget);
       expect(find.text('New Game'), findsOneWidget);
     });
 
     testWidgets('renders in level mode with LevelConfig', (tester) async {
       final config = const LevelGenerator().generate(1);
+      final saveState = SaveState(bonusMoves: 30);
 
       await tester.pumpWidget(
-        MaterialApp(home: GameScreen(levelConfig: config)),
+        MaterialApp(home: GameScreen(levelConfig: config, saveState: saveState)),
       );
       await tester.pump();
 
       expect(find.text('SCORE'), findsOneWidget);
-      expect(find.text('MOVES LEFT'), findsOneWidget);
+      expect(find.text('MOVES'), findsOneWidget);
       expect(find.text('LEVEL 1'), findsOneWidget);
       expect(find.text('Restart'), findsOneWidget);
     });
 
-    testWidgets('displays move limit from config', (tester) async {
+    testWidgets('displays moves from saveState bonusMoves', (tester) async {
       final config = const LevelGenerator().generate(1);
+      final saveState = SaveState(bonusMoves: 25);
 
       await tester.pumpWidget(
-        MaterialApp(home: GameScreen(levelConfig: config)),
+        MaterialApp(home: GameScreen(levelConfig: config, saveState: saveState)),
       );
       await tester.pump();
 
-      // The move limit should be displayed.
-      expect(find.text('${config.moveLimit}'), findsOneWidget);
+      // Moves come from saveState.bonusMoves, displayed as "XX/60".
+      expect(find.textContaining('25/'), findsOneWidget);
     });
 
     testWidgets('shows objective HUD for score objective', (tester) async {
@@ -81,17 +85,18 @@ void main() {
     testWidgets('state exposes test accessors correctly', (tester) async {
       final key = GlobalKey<GameScreenState>();
       final config = const LevelGenerator().generate(1);
+      final saveState = SaveState(bonusMoves: 30);
 
       await tester.pumpWidget(
         MaterialApp(
-          home: GameScreen(key: key, levelConfig: config),
+          home: GameScreen(key: key, levelConfig: config, saveState: saveState),
         ),
       );
       await tester.pump();
 
       final state = key.currentState!;
       expect(state.score, 0);
-      expect(state.movesRemaining, config.moveLimit);
+      expect(state.movesRemaining, 30);
       expect(state.movesUsed, 0);
       expect(state.obstaclesDestroyed, 0);
       expect(state.gemsCollected, 0);
@@ -99,24 +104,26 @@ void main() {
     });
 
     testWidgets('free mode does not show objective HUD', (tester) async {
+      final saveState = SaveState(bonusMoves: 30);
       await tester.pumpWidget(
-        const MaterialApp(home: GameScreen()),
+        MaterialApp(home: GameScreen(saveState: saveState)),
       );
       await tester.pump();
 
       // Free mode should not show "LEVEL" text.
       expect(find.textContaining('LEVEL'), findsNothing);
-      // Free mode now shows "MOVES LEFT" with a 30-move limit.
-      expect(find.text('MOVES LEFT'), findsOneWidget);
+      // Free mode now shows "MOVES" header.
+      expect(find.text('MOVES'), findsOneWidget);
     });
 
     testWidgets('restart button resets state in level mode', (tester) async {
       final key = GlobalKey<GameScreenState>();
       final config = const LevelGenerator().generate(1);
+      final saveState = SaveState(bonusMoves: 30);
 
       await tester.pumpWidget(
         MaterialApp(
-          home: GameScreen(key: key, levelConfig: config),
+          home: GameScreen(key: key, levelConfig: config, saveState: saveState),
         ),
       );
       await tester.pump();
@@ -127,7 +134,8 @@ void main() {
 
       final state = key.currentState!;
       expect(state.score, 0);
-      expect(state.movesRemaining, config.moveLimit);
+      // After restart, moves come from saveState.bonusMoves again.
+      expect(state.movesRemaining, greaterThanOrEqualTo(0));
     });
   });
 

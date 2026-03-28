@@ -44,7 +44,9 @@ void main() {
       await tester.tap(find.byKey(const Key('powerup_mega_moves_btn')));
       await tester.pumpAndSettle();
 
-      expect(state.movesRemaining, initialMoves + 60);
+      // Moves are capped at maxBonusMoves (default 60).
+      final expected = (initialMoves + 60).clamp(0, saveState.maxBonusMoves);
+      expect(state.movesRemaining, expected);
       expect(saveState.powerUpCount('powerup_mega_moves'), 0);
       expect(powerUpUsedCalled, true);
     });
@@ -88,7 +90,7 @@ void main() {
   });
 
   group('GameScreen bonus moves at level start', () {
-    testWidgets('bonus moves are consumed at level start', (tester) async {
+    testWidgets('bonus moves ARE the moves at level start', (tester) async {
       final saveState = SaveState(bonusMoves: 5);
 
       await tester.pumpWidget(
@@ -100,12 +102,11 @@ void main() {
 
       final state =
           tester.state<GameScreenState>(find.byType(GameScreen));
-      // Free mode starts with 30 + 5 bonus = 35
-      expect(state.movesRemaining, 35);
-      expect(saveState.bonusMoves, 0);
+      // Moves come directly from saveState.bonusMoves (no free level moves).
+      expect(state.movesRemaining, 5);
     });
 
-    testWidgets('no bonus moves consumed when saveState is null',
+    testWidgets('no moves when saveState is null',
         (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
@@ -116,7 +117,8 @@ void main() {
 
       final state =
           tester.state<GameScreenState>(find.byType(GameScreen));
-      expect(state.movesRemaining, 30);
+      // Without saveState, moves are 0.
+      expect(state.movesRemaining, 0);
     });
   });
 }

@@ -17,6 +17,9 @@ import '../game/match_detector.dart';
 import '../game/obstacle_manager.dart';
 import '../game/save_system.dart';
 import '../game/score_calculator.dart';
+import '../game/store_config.dart';
+import '../game/background_manager.dart';
+import 'package:share_plus/share_plus.dart';
 
 /// Temporary floating reward text shown above the board.
 class _FloatingReward {
@@ -89,13 +92,18 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
 
   int _score = 0;
   int _movesUsed = 0;
-  int _movesRemaining = 0;
+  int get _movesRemaining => widget.saveState?.bonusMoves ?? 0;
   int _gemsCollected = 0;
   int _obstaclesDestroyed = 0;
   Map<GemType, int> _gemsCollectedByType = {};
   Position? _selected;
   bool _processing = false;
   Set<Position> _hintPositions = {};
+
+  // Swipe/drag state
+  Position? _swipeStart;
+  double _swipeCellW = 0;
+  double _swipeCellH = 0;
   Set<Position> _matchedPositions = {};
   String? _comboText;
   double _comboX = 0.5;
@@ -162,14 +170,12 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       final config = _levelConfig!;
       _rows = config.rows;
       _cols = config.cols;
-      _movesRemaining = config.moveLimit;
       _gravityHandler = GravityHandler(gemTypeCount: config.gemTypeCount);
       _obstacleManager = ObstacleManager();
       _obstacleManager.initialize(config.obstacles);
     } else {
       _rows = 8;
       _cols = 8;
-      _movesRemaining = 30;
       _gravityHandler = GravityHandler();
       _obstacleManager = ObstacleManager();
     }
@@ -193,12 +199,10 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     _farmingMoves = 0;
     _floatingRewards.clear();
 
-    // Consume bonus moves at level start.
+    // Regenerate moves in the global save state.
     final saveState = widget.saveState;
     if (saveState != null) {
       saveState.regenerateMoves();
-      final bonus = saveState.consumeBonusMoves();
-      _movesRemaining += bonus;
     }
 
     // Ensure music resumes when (re)starting a level.
@@ -248,6 +252,63 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     _executeSwap(_selected!, tapped);
   }
 
+  void _onPanStart(DragStartDetails details, double cellW, double cellH) {
+    if (_processing || _levelEnded) return;
+    final col = (details.localPosition.dx / cellW).floor().clamp(0, _cols - 1);
+    final row = (details.localPosition.dy / cellH).floor().clamp(0, _rows - 1);
+    final pos = Position(row, col);
+    if (_obstacleManager.blocksCell(pos)) return;
+    _swipeStart = pos;
+    _swipeCellW = cellW;
+    _swipeCellH = cellH;
+    // Clear tap selection when starting a swipe.
+    if (_selected != null) {
+      setState(() {
+        _selected = null;
+        _hintPositions = {};
+      });
+    }
+  }
+
+  void _onPanEnd(DragEndDetails details) {
+    _swipeStart = null;
+  }
+
+  void _onPanUpdate(DragUpdateDetails details) {
+    if (_processing || _levelEnded || _swipeStart == null) return;
+
+    final dx = details.localPosition.dx - (_swipeStart!.col + 0.5) * _swipeCellW;
+    final dy = details.localPosition.dy - (_swipeStart!.row + 0.5) * _swipeCellH;
+
+    // Require at least half a cell size of drag distance before triggering.
+    final threshold = (_swipeCellW < _swipeCellH ? _swipeCellW : _swipeCellH) * 0.35;
+    if (dx.abs() < threshold && dy.abs() < threshold) return;
+
+    Position target;
+    if (dx.abs() > dy.abs()) {
+      // Horizontal swipe
+      target = Position(
+        _swipeStart!.row,
+        (_swipeStart!.col + (dx > 0 ? 1 : -1)).clamp(0, _cols - 1),
+      );
+    } else {
+      // Vertical swipe
+      target = Position(
+        (_swipeStart!.row + (dy > 0 ? 1 : -1)).clamp(0, _rows - 1),
+        _swipeStart!.col,
+      );
+    }
+
+    final start = _swipeStart!;
+    _swipeStart = null; // Consume the swipe so it only triggers once.
+
+    if (!start.isAdjacentTo(target)) return;
+    if (_obstacleManager.blocksCell(target)) return;
+    if (_obstacleManager.isLocked(start) || _obstacleManager.isLocked(target)) return;
+
+    _executeSwap(start, target);
+  }
+
   Future<void> _executeSwap(Position a, Position b) async {
     setState(() {
       _processing = true;
@@ -275,7 +336,10 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     _board.swap(a, b);
     _movesUsed++;
     if (!_isFarmingMode && _movesRemaining > 0) {
-      _movesRemaining--;
+      final saveState = widget.saveState;
+      if (saveState != null) {
+        saveState.bonusMoves = (saveState.bonusMoves - 1).clamp(0, saveState.maxBonusMoves);
+      }
     }
     setState(() {});
 
@@ -348,7 +412,7 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
           _farmingMoves += 1;
           if (widget.saveState != null) {
             widget.saveState!.bonusMoves =
-                (widget.saveState!.bonusMoves + 1).clamp(0, SaveState.maxBonusMoves);
+                (widget.saveState!.bonusMoves + 1).clamp(0, widget.saveState!.maxBonusMoves);
           }
           _addFloatingReward('+1\uD83D\uDC8A', allMatchedPos);
         }
@@ -621,7 +685,22 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     );
   }
 
+  /// Whether the current level is a trophy milestone (every 10 levels).
+  bool get _isTrophyLevel {
+    final lvl = widget.levelNumber;
+    return lvl != null && lvl > 0 && lvl % 10 == 0;
+  }
+
+  void _shareTrophy() async {
+    final lvl = widget.levelNumber ?? 0;
+    final storeUrl = await StoreConfig.getStoreUrl();
+    final text =
+        'Ich habe Level $lvl in Match3 geschafft! Probier es auch: $storeUrl';
+    await Share.share(text);
+  }
+
   void _showLevelEndDialog(bool won, int stars, int coinsEarned) {
+    final showTrophy = won && _isTrophyLevel;
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -640,6 +719,25 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (showTrophy) ...[
+              const Text(
+                '\uD83C\uDFC6',
+                key: Key('trophy_icon'),
+                style: TextStyle(fontSize: 64),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Meilenstein: Level ${widget.levelNumber}!',
+                key: const Key('trophy_milestone_text'),
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.amberAccent,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
             if (won) ...[
               Text(
                 _starString(stars),
@@ -709,6 +807,22 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
               style: const TextStyle(color: Colors.white70),
             ),
           ),
+          if (showTrophy)
+            TextButton(
+              key: const Key('share_trophy_btn'),
+              onPressed: _shareTrophy,
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.share, color: Colors.amberAccent, size: 18),
+                  SizedBox(width: 4),
+                  Text(
+                    'Teilen',
+                    style: TextStyle(color: Colors.amberAccent),
+                  ),
+                ],
+              ),
+            ),
           if (!won)
             TextButton(
               key: const Key('back_to_level_select_btn'),
@@ -850,24 +964,27 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     return widget.saveState?.powerUpCount(powerUpId) ?? 0;
   }
 
-  /// Use the Extra Moves power-up: adds 20 moves.
+  /// Maximum moves allowed (from save state or fallback).
+  int get _maxMoves => widget.saveState?.maxBonusMoves ?? 60;
+
+  /// Use the Extra Moves power-up: adds up to 20 moves (capped at max).
   void _useExtraMoves() {
     if (_processing || _levelEnded) return;
     final saveState = widget.saveState;
     if (saveState == null || !saveState.usePowerUp(powerUpExtraMoves)) return;
     setState(() {
-      _movesRemaining += 20;
+      saveState.bonusMoves = (saveState.bonusMoves + 20).clamp(0, _maxMoves);
     });
     widget.onPowerUpUsed?.call();
   }
 
-  /// Use the Mega Moves power-up: adds 60 moves.
+  /// Use the Mega Moves power-up: adds up to 60 moves (capped at max).
   void _useMegaMoves() {
     if (_processing || _levelEnded) return;
     final saveState = widget.saveState;
     if (saveState == null || !saveState.usePowerUp(powerUpMegaMoves)) return;
     setState(() {
-      _movesRemaining += 60;
+      saveState.bonusMoves = (saveState.bonusMoves + 60).clamp(0, _maxMoves);
     });
     widget.onPowerUpUsed?.call();
   }
@@ -1028,21 +1145,46 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
+    final isLandscape =
+        MediaQuery.of(context).orientation == Orientation.landscape;
+    final bgPath = BackgroundManager.getBackgroundPath(
+      widget.levelNumber ?? 1,
+      landscape: isLandscape,
+    );
+
     return Scaffold(
       backgroundColor: const Color(0xFF1a1a2e),
-      body: SafeArea(
-        child: Stack(
-          children: [
-            Column(
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          // Background image layer
+          Image.asset(
+            bgPath,
+            fit: BoxFit.cover,
+            width: double.infinity,
+            height: double.infinity,
+          ),
+          // Semi-transparent overlay for readability
+          Container(color: const Color(0xAA1a1a2e)),
+          // Original UI
+          SafeArea(
+            child: Stack(
               children: [
-                _buildHeader(),
-                if (_isLevelMode) _buildObjectiveHud(),
-                Expanded(child: _buildBoard()),
-                _buildFooter(),
+                Column(
+                  children: [
+                    _buildHeader(),
+                    if (_isLevelMode && _levelConfig!.isBossLevel)
+                      _buildBossHud()
+                    else if (_isLevelMode)
+                      _buildObjectiveHud(),
+                    Expanded(child: _buildBoard()),
+                    _buildFooter(),
+                  ],
+                ),
               ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -1096,9 +1238,9 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'SCORE',
-                    style: TextStyle(
+                  Text(
+                    (_levelConfig?.isBossLevel == true) ? 'DAMAGE' : 'SCORE',
+                    style: const TextStyle(
                       color: Colors.white54,
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
@@ -1107,8 +1249,10 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                   ),
                   Text(
                     '$_score',
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: (_levelConfig?.isBossLevel == true)
+                          ? Colors.orangeAccent
+                          : Colors.white,
                       fontSize: 28,
                       fontWeight: FontWeight.bold,
                     ),
@@ -1135,7 +1279,7 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    _isFarmingMode ? 'FARMING' : 'MOVES LEFT',
+                    _isFarmingMode ? 'FARMING' : 'MOVES',
                     style: const TextStyle(
                       color: Colors.white54,
                       fontSize: 12,
@@ -1143,19 +1287,159 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                       letterSpacing: 2,
                     ),
                   ),
-                  Text(
-                    _isFarmingMode ? '\u221E' : '$_movesRemaining',
-                    style: TextStyle(
-                      color: _isFarmingMode
-                          ? Colors.amberAccent
-                          : _movesRemaining <= 5
-                              ? Colors.redAccent
-                              : Colors.white,
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.directions_walk,
+                        color: _isFarmingMode
+                            ? Colors.amberAccent
+                            : _movesRemaining <= 5
+                                ? Colors.redAccent
+                                : Colors.lightBlueAccent,
+                        size: 22,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        _isFarmingMode
+                            ? '\u221E'
+                            : '$_movesRemaining/${widget.saveState?.maxBonusMoves ?? 60}',
+                        style: TextStyle(
+                          color: _isFarmingMode
+                              ? Colors.amberAccent
+                              : _movesRemaining <= 5
+                                  ? Colors.redAccent
+                                  : Colors.white,
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBossHud() {
+    final config = _levelConfig!;
+    final bossInfo = config.bossInfo!;
+    final remainingHp = (bossInfo.hp - _score).clamp(0, bossInfo.hp);
+    final hpFraction = remainingHp / bossInfo.hp;
+
+    // HP bar color: green > 50%, yellow 25-50%, red < 25%.
+    final Color hpColor;
+    if (hpFraction > 0.5) {
+      hpColor = Colors.greenAccent;
+    } else if (hpFraction > 0.25) {
+      hpColor = Colors.amberAccent;
+    } else {
+      hpColor = Colors.redAccent;
+    }
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: hpFraction <= 0
+              ? Colors.greenAccent.withValues(alpha: 0.6)
+              : Colors.redAccent.withValues(alpha: 0.4),
+          width: 1.5,
+        ),
+      ),
+      child: Row(
+        children: [
+          // Boss emoji
+          Text(
+            bossInfo.emoji,
+            style: const TextStyle(fontSize: 36),
+          ),
+          const SizedBox(width: 12),
+          // Name + HP bar
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  bossInfo.name,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                // HP bar
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: SizedBox(
+                    height: 14,
+                    child: Stack(
+                      children: [
+                        // Background
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                        ),
+                        // Fill
+                        FractionallySizedBox(
+                          widthFactor: hpFraction.clamp(0.0, 1.0),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: hpColor,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                // HP text
+                Text(
+                  '$remainingHp / ${bossInfo.hp} HP',
+                  style: TextStyle(
+                    color: hpColor.withValues(alpha: 0.9),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Damage dealt indicator
+          Column(
+            children: [
+              const Text(
+                '\u2694\uFE0F', // ⚔️
+                style: TextStyle(fontSize: 18),
+              ),
+              Text(
+                '$_score',
+                style: const TextStyle(
+                  color: Colors.orangeAccent,
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const Text(
+                'DMG',
+                style: TextStyle(
+                  color: Colors.white38,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ],
           ),
@@ -1258,27 +1542,31 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     final comboLeft = _comboX * boardWidth;
     final comboTop = _comboY * boardHeight - yOffset;
     return Positioned(
-      left: comboLeft - 60,
+      left: comboLeft,
       top: comboTop - 20,
-      width: 120,
-      child: IgnorePointer(
-        child: Opacity(
-          opacity: animValue.clamp(0.0, 1.0),
-          child: Transform.scale(
-            scale: 0.5 + 0.5 * animValue,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              decoration: BoxDecoration(
-                color: Colors.black54,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                _comboText!,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Colors.amberAccent,
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
+      child: FractionalTranslation(
+        translation: const Offset(-0.5, 0),
+        child: IgnorePointer(
+          child: Opacity(
+            opacity: animValue.clamp(0.0, 1.0),
+            child: Transform.scale(
+              scale: 0.5 + 0.5 * animValue,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.black54,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  _comboText!,
+                  maxLines: 1,
+                  softWrap: false,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Colors.amberAccent,
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ),
@@ -1339,16 +1627,22 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                 final boardHeight = constraints.maxHeight;
                 final cellW = boardWidth / _cols;
                 final cellH = boardHeight / _rows;
-                return Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    ..._buildGridBackground(cellW, cellH),
-                    ..._buildObstacleTiles(cellW, cellH),
-                    ..._buildGemTiles(cellW, cellH),
-                    if (_comboText != null)
-                      _buildComboOverlay(boardWidth, boardHeight),
-                    ..._buildFloatingRewards(boardWidth, boardHeight),
-                  ],
+                return GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  onPanStart: (d) => _onPanStart(d, cellW, cellH),
+                  onPanUpdate: _onPanUpdate,
+                  onPanEnd: _onPanEnd,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      ..._buildGridBackground(cellW, cellH),
+                      ..._buildObstacleTiles(cellW, cellH),
+                      ..._buildGemTiles(cellW, cellH),
+                      if (_comboText != null)
+                        _buildComboOverlay(boardWidth, boardHeight),
+                      ..._buildFloatingRewards(boardWidth, boardHeight),
+                    ],
+                  ),
                 );
               },
             ),
@@ -1635,7 +1929,7 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
           style: TextStyle(color: Colors.white),
         ),
         content: const Text(
-          'Spiel verlassen? Fortschritt geht verloren.',
+          'Spiel verlassen? Deine Zuege bleiben erhalten.',
           style: TextStyle(color: Colors.white70),
         ),
         actions: [
@@ -1654,6 +1948,7 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       ),
     );
     if (shouldExit == true && mounted) {
+      widget.onPowerUpUsed?.call(); // Persist state changes.
       Navigator.pop(context);
     }
   }
@@ -1670,13 +1965,13 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       children: [
         _buildPowerUpButton(
           key: const Key('powerup_extra_moves_btn'),
-          emoji: '\uD83D\uDC8A+20',
+          emoji: '\uD83D\uDC8A20',
           count: extraMovesCount,
           onTap: disabled || extraMovesCount <= 0 ? null : _useExtraMoves,
         ),
         _buildPowerUpButton(
           key: const Key('powerup_mega_moves_btn'),
-          emoji: '\uD83D\uDC8A+60',
+          emoji: '\uD83D\uDC8A60',
           count: megaMovesCount,
           onTap: disabled || megaMovesCount <= 0 ? null : _useMegaMoves,
         ),

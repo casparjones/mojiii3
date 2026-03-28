@@ -84,6 +84,49 @@ class LevelObjective {
   });
 }
 
+/// Boss info for boss levels (every 10th level).
+class BossInfo {
+  final String name;
+  final String emoji;
+  final int hp;
+
+  const BossInfo({
+    required this.name,
+    required this.emoji,
+    required this.hp,
+  });
+
+  /// Get boss info for a given level number.
+  /// Returns null if the level is not a boss level.
+  static BossInfo? forLevel(int levelNumber) {
+    if (levelNumber <= 0 || levelNumber % 10 != 0) return null;
+    final tier = (levelNumber ~/ 10).clamp(1, 10);
+    final hp = tier * 500;
+    switch (tier) {
+      case 1:
+        return BossInfo(name: 'Wald-Goblin', emoji: '\u{1F479}', hp: hp);
+      case 2:
+        return BossInfo(name: 'Kraken', emoji: '\u{1F419}', hp: hp);
+      case 3:
+        return BossInfo(name: 'Pilz-K\u00F6nig', emoji: '\u{1F344}', hp: hp);
+      case 4:
+        return BossInfo(name: 'Eisriese', emoji: '\u2744\uFE0F', hp: hp);
+      case 5:
+        return BossInfo(name: 'Sand-Wurm', emoji: '\u{1F3DC}\uFE0F', hp: hp);
+      case 6:
+        return BossInfo(name: 'Zucker-Hexe', emoji: '\u{1F36D}', hp: hp);
+      case 7:
+        return BossInfo(name: 'Alien-Lord', emoji: '\u{1F47E}', hp: hp);
+      case 8:
+        return BossInfo(name: 'Tiefsee-Monster', emoji: '\u{1F991}', hp: hp);
+      case 9:
+        return BossInfo(name: 'Feuer-Drache', emoji: '\u{1F30B}', hp: hp);
+      default:
+        return BossInfo(name: 'Kristall-Titan', emoji: '\u{1F48E}', hp: hp);
+    }
+  }
+}
+
 /// Complete level configuration generated from a level number.
 class LevelConfig {
   final int levelNumber;
@@ -99,6 +142,15 @@ class LevelConfig {
   /// Difficulty factor (0.0 = easiest, 1.0 = hardest).
   final double difficulty;
 
+  /// Whether this is a boss level.
+  final bool isBossLevel;
+
+  /// Boss HP (only relevant if isBossLevel is true).
+  final int bossHp;
+
+  /// Boss info (only relevant if isBossLevel is true).
+  final BossInfo? bossInfo;
+
   const LevelConfig({
     required this.levelNumber,
     required this.rows,
@@ -110,6 +162,9 @@ class LevelConfig {
     this.timeLimitSeconds = 0,
     this.obstacles = const [],
     required this.difficulty,
+    this.isBossLevel = false,
+    this.bossHp = 0,
+    this.bossInfo,
   });
 }
 
@@ -126,6 +181,48 @@ class LevelGenerator {
     final difficulty = _calculateDifficulty(levelNumber);
     final boardSize = _calculateBoardSize(levelNumber, difficulty);
     final gemTypeCount = _calculateGemTypeCount(levelNumber, difficulty);
+
+    // Check if this is a boss level (every 10th level).
+    final bossInfo = BossInfo.forLevel(levelNumber);
+    final isBoss = bossInfo != null;
+
+    if (isBoss) {
+      // Boss levels are always move-based with extra moves.
+      final baseMoves = _calculateMoveLimit(
+        levelNumber, difficulty, LevelConstraintType.moves,
+      );
+      final moveLimit = baseMoves + 5;
+      final bossHp = bossInfo.hp;
+      // Boss gem count: slightly more types for difficulty.
+      final bossGemCount = (gemTypeCount + 1).clamp(4, GemType.count);
+
+      final objective = LevelObjective(
+        type: LevelObjectiveType.score,
+        targetScore: bossHp,
+        twoStarScore: (bossHp * 1.3).round(),
+        threeStarScore: (bossHp * 1.8).round(),
+      );
+
+      final obstacles = _generateObstacles(
+        levelNumber, difficulty, rng, boardSize[0], boardSize[1],
+      );
+
+      return LevelConfig(
+        levelNumber: levelNumber,
+        rows: boardSize[0],
+        cols: boardSize[1],
+        gemTypeCount: bossGemCount,
+        objective: objective,
+        constraintType: LevelConstraintType.moves,
+        moveLimit: moveLimit,
+        obstacles: obstacles,
+        difficulty: difficulty,
+        isBossLevel: true,
+        bossHp: bossHp,
+        bossInfo: bossInfo,
+      );
+    }
+
     final constraintType = _calculateConstraintType(levelNumber, rng);
     final moveLimit = _calculateMoveLimit(levelNumber, difficulty, constraintType);
     final timeLimitSeconds = constraintType == LevelConstraintType.timed

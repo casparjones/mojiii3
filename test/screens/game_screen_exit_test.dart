@@ -56,7 +56,7 @@ void main() {
       // Dialog should appear
       expect(find.text('Spiel verlassen?'), findsOneWidget);
       expect(
-        find.text('Spiel verlassen? Fortschritt geht verloren.'),
+        find.text('Spiel verlassen? Deine Zuege bleiben erhalten.'),
         findsOneWidget,
       );
       expect(find.text('Abbrechen'), findsOneWidget);

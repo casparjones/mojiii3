@@ -165,7 +165,7 @@ class SaveState {
   /// The ID of the currently selected emoji theme.
   String selectedThemeId;
 
-  /// Bonus moves accumulated over time (max 10).
+  /// Bonus moves accumulated over time (default max 60).
   int bonusMoves;
 
   /// Last time bonus moves were regenerated.
@@ -183,39 +183,55 @@ class SaveState {
     this.tutorialShown = false,
     this.selectedThemeId = 'theme_fruit',
     this.bonusMoves = 0,
+    this.maxBonusMoves = SaveState.defaultMaxBonusMoves,
     this.lastMoveRegenTime,
   })  : stats = stats ?? PlayerStats(),
         levelRecords = levelRecords ?? {},
         unlockedExtras = unlockedExtras ?? {},
         powerUpInventory = powerUpInventory ?? {};
 
-  /// Maximum bonus moves that can be stored.
-  static const int maxBonusMoves = 10;
+  /// Default maximum bonus moves.
+  static const int defaultMaxBonusMoves = 60;
+
+  /// Maximum bonus moves that can be stored (upgrade-able via shop).
+  int maxBonusMoves;
 
   /// Interval between bonus move regenerations.
-  static const Duration regenInterval = Duration(minutes: 10);
+  static const Duration regenInterval = Duration(minutes: 5);
+
+  /// Minutes per regenerated move.
+  static const int _regenMinutes = 5;
 
   /// Regenerate bonus moves based on elapsed time.
   /// Returns the number of moves regenerated.
   int regenerateMoves() {
     final now = DateTime.now();
-    final lastRegen = lastMoveRegenTime ?? now;
 
     if (lastMoveRegenTime == null) {
       lastMoveRegenTime = now;
       return 0;
     }
 
+    final lastRegen = lastMoveRegenTime!;
     final elapsed = now.difference(lastRegen);
-    final intervals = elapsed.inMinutes ~/ 10;
+    final intervals = elapsed.inSeconds ~/ (_regenMinutes * 60);
 
     if (intervals <= 0) return 0;
 
-    final movesToAdd = intervals.clamp(0, maxBonusMoves - bonusMoves);
+    final space = maxBonusMoves - bonusMoves;
+    if (space <= 0) {
+      // Already at max – keep timestamp current so we don't accumulate
+      // a huge delta that gets applied later when moves are spent.
+      lastMoveRegenTime = now;
+      return 0;
+    }
+
+    final movesToAdd = intervals.clamp(0, space);
     bonusMoves = (bonusMoves + movesToAdd).clamp(0, maxBonusMoves);
 
-    // Advance lastMoveRegenTime by the consumed intervals.
-    lastMoveRegenTime = lastRegen.add(Duration(minutes: intervals * 10));
+    // Advance lastMoveRegenTime only by the consumed intervals
+    // (keeps remainder for next calculation).
+    lastMoveRegenTime = lastRegen.add(Duration(minutes: movesToAdd * _regenMinutes));
 
     return movesToAdd;
   }
@@ -351,6 +367,7 @@ class SaveState {
         'tutorialShown': tutorialShown,
         'selectedThemeId': selectedThemeId,
         'bonusMoves': bonusMoves,
+        'maxBonusMoves': maxBonusMoves,
         'lastMoveRegenTime': lastMoveRegenTime?.toIso8601String(),
       };
 
@@ -391,6 +408,7 @@ class SaveState {
       tutorialShown: json['tutorialShown'] as bool? ?? false,
       selectedThemeId: json['selectedThemeId'] as String? ?? 'theme_fruit',
       bonusMoves: json['bonusMoves'] as int? ?? 0,
+      maxBonusMoves: json['maxBonusMoves'] as int? ?? SaveState.defaultMaxBonusMoves,
       lastMoveRegenTime: json['lastMoveRegenTime'] != null
           ? DateTime.tryParse(json['lastMoveRegenTime'] as String)
           : null,

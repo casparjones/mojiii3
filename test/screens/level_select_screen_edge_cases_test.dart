@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:match3/screens/level_select_screen.dart';
@@ -120,13 +121,13 @@ void main() {
       expect(find.byType(LevelSelectScreen), findsNothing);
     });
 
-    testWidgets('grid uses 4 columns', (tester) async {
+    testWidgets('grid uses 2 columns', (tester) async {
       await tester.pumpWidget(createApp(totalLevels: 8));
 
-      final gridView = tester.widget<GridView>(find.byType(GridView));
-      final delegate = gridView.gridDelegate
+      final sliverGrid = tester.widget<SliverGrid>(find.byType(SliverGrid));
+      final delegate = sliverGrid.gridDelegate
           as SliverGridDelegateWithFixedCrossAxisCount;
-      expect(delegate.crossAxisCount, 4);
+      expect(delegate.crossAxisCount, 2);
     });
 
     testWidgets('AppBar is centered', (tester) async {

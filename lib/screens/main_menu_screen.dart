@@ -183,33 +183,65 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                   const Spacer(flex: 2),
                   _buildLogo(),
                   const Spacer(flex: 1),
-                  // Coin display
+                  // Coin & moves display
                   Builder(builder: (context) {
                     final gsm = GameStateManagerProvider.of(context);
-                    return Container(
-                      key: const Key('main_menu_coins'),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 20, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Text('🪙',
-                              style: TextStyle(fontSize: 20)),
-                          const SizedBox(width: 8),
-                          Text(
-                            '${gsm.coins}',
-                            style: const TextStyle(
-                              color: Colors.amber,
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                            ),
+                    final ss = gsm.saveState;
+                    return Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          key: const Key('main_menu_coins'),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 20, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(20),
                           ),
-                        ],
-                      ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Text('🪙',
+                                  style: TextStyle(fontSize: 20)),
+                              const SizedBox(width: 8),
+                              Text(
+                                '${gsm.coins}',
+                                style: const TextStyle(
+                                  color: Colors.amber,
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Container(
+                          key: const Key('main_menu_moves'),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 20, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.directions_walk,
+                                  color: Colors.lightBlueAccent, size: 22),
+                              const SizedBox(width: 8),
+                              Text(
+                                '${ss.bonusMoves}/${ss.maxBonusMoves}',
+                                style: const TextStyle(
+                                  color: Colors.lightBlueAccent,
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     );
                   }),
                   const SizedBox(height: 24),

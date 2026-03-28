@@ -7,7 +7,7 @@ void main() {
     test('regenerateMoves delegates to saveState', () {
       final save = SaveState();
       save.lastMoveRegenTime = DateTime.now().subtract(
-        const Duration(minutes: 20),
+        const Duration(minutes: 10),
       );
       final gsm = GameStateManager(saveState: save);
 
@@ -19,7 +19,7 @@ void main() {
     test('regenerateMoves returns 0 when nothing to regenerate', () {
       final save = SaveState();
       save.lastMoveRegenTime = DateTime.now().subtract(
-        const Duration(minutes: 5),
+        const Duration(minutes: 4),
       );
       final gsm = GameStateManager(saveState: save);
 
