@@ -2527,6 +2527,35 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
         mainAxisSize: MainAxisSize.min,
         children: [
           // Power-up bar (only shown if saveState is provided)
+          // Debug bar (above power-ups)
+          if (widget.saveState != null && (GameStateManagerProvider.maybeRead(context)?.settings.debugMode ?? false))
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _buildButton(
+                    icon: Icons.monetization_on,
+                    label: '+200 Coins',
+                    onTap: () {
+                      setState(() => widget.saveState!.coins += 200);
+                    },
+                  ),
+                  const SizedBox(width: 12),
+                  _buildButton(
+                    icon: Icons.add_circle_outline,
+                    label: '+20 Moves',
+                    onTap: () {
+                      setState(() {
+                        widget.saveState!.bonusMoves =
+                            (widget.saveState!.bonusMoves + 20)
+                                .clamp(0, widget.saveState!.maxBonusMoves + 20);
+                      });
+                    },
+                  ),
+                ],
+              ),
+            ),
           if (widget.saveState != null) _buildPowerUpBar(),
           if (widget.saveState != null) const SizedBox(height: 8),
           // Action buttons
@@ -2550,20 +2579,6 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                 label: 'Exit',
                 onTap: _processing ? null : _confirmExit,
               ),
-              if (widget.saveState != null && (GameStateManagerProvider.maybeRead(context)?.settings.debugMode ?? false))
-                _buildButton(
-                  icon: Icons.add_circle_outline,
-                  label: '+10 Moves',
-                  onTap: () {
-                    if (widget.saveState != null) {
-                      setState(() {
-                        widget.saveState!.bonusMoves =
-                            (widget.saveState!.bonusMoves + 10)
-                                .clamp(0, widget.saveState!.maxBonusMoves + 10);
-                      });
-                    }
-                  },
-                ),
             ],
           ),
         ],
