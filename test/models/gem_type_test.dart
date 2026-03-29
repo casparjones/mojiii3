@@ -14,6 +14,7 @@ void main() {
     test('has correct values', () {
       expect(SpecialType.values, contains(SpecialType.none));
       expect(SpecialType.values, contains(SpecialType.bomb));
+      expect(SpecialType.values, contains(SpecialType.crossBomb));
       expect(SpecialType.values, contains(SpecialType.rainbow));
       expect(SpecialType.values, contains(SpecialType.stripedHorizontal));
       expect(SpecialType.values, contains(SpecialType.stripedVertical));

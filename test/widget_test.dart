@@ -11,7 +11,7 @@ void main() {
     await tester.pump();
 
     // Verify the app renders the main menu
-    expect(find.text('Match3'), findsOneWidget);
+    expect(find.textContaining('jiii 3'), findsOneWidget);
     expect(find.text('Play'), findsOneWidget);
     expect(find.text('Shop'), findsOneWidget);
     expect(find.text('Settings'), findsOneWidget);

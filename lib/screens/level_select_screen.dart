@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../game/game_state_manager.dart';
 import '../game/level_generator.dart';
 import '../main.dart';
+import '../widgets/emoji_text.dart';
 import 'game_screen.dart';
 
 /// Scrollable grid of levels showing progress, stars, and highscores.
@@ -23,6 +24,13 @@ class LevelSelectScreen extends StatefulWidget {
 class _LevelSelectScreenState extends State<LevelSelectScreen> {
   GameStateManager get _gsm => GameStateManagerProvider.read(context);
   bool _didRegenerate = false;
+  final ScrollController _newLevelsScrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _newLevelsScrollController.dispose();
+    super.dispose();
+  }
 
   /// Whether the player has any moves available (bonus moves or extra-moves
   /// power-ups). The level's own moveLimit is always granted, but bonus moves
@@ -104,24 +112,53 @@ class _LevelSelectScreenState extends State<LevelSelectScreen> {
     );
   }
 
-  /// Returns level numbers for the "New Levels" tab:
-  /// unlocked levels with no completion (stars == 0), plus the next locked
-  /// level as a preview.
+  /// Returns level numbers for the "New Levels" tab.
+  ///
+  /// Shows uncompleted levels plus enough completed levels to fill rows.
+  /// The last completed level always appears left of the current level,
+  /// so no row has a gap. Completed levels from the same row-pair and
+  /// one row above are kept visible for context and farming.
   List<int> _newLevels(GameStateManager gsm) {
-    final result = <int>[];
-    int? firstLockedLevel;
+    // Find the first uncompleted unlocked level (the "current" level).
+    int? currentLevel;
     for (var i = 1; i <= widget.totalLevels; i++) {
       final unlocked = gsm.isLevelUnlocked(i);
-      final record = gsm.levelRecords[i];
-      final stars = record?.bestStars ?? 0;
+      final stars = gsm.levelRecords[i]?.bestStars ?? 0;
       if (unlocked && stars == 0) {
-        result.add(i);
-      } else if (!unlocked && firstLockedLevel == null) {
-        firstLockedLevel = i;
+        currentLevel = i;
+        break;
       }
     }
-    if (firstLockedLevel != null) {
-      result.add(firstLockedLevel);
+
+    // In the 2-column grid, rows start at odd numbers (1,3,5,...).
+    // If current level is even (right column), show the previous completed
+    // level on the left. If odd (left column), start fresh from there.
+    final int startLevel;
+    if (currentLevel != null) {
+      if (currentLevel.isOdd) {
+        // Current is in left column — no completed levels needed.
+        startLevel = currentLevel;
+      } else {
+        // Current is in right column — show previous level on the left.
+        startLevel = currentLevel - 1;
+      }
+    } else {
+      // All levels completed — show last pair.
+      final last = widget.totalLevels;
+      startLevel = last.isOdd ? last : last - 1;
+    }
+
+    final result = <int>[];
+    int? firstLockedLevel;
+    for (var i = startLevel; i <= widget.totalLevels; i++) {
+      final unlocked = gsm.isLevelUnlocked(i);
+      if (unlocked) {
+        result.add(i);
+      } else if (firstLockedLevel == null) {
+        firstLockedLevel = i;
+        result.add(i); // Show as locked preview.
+        break;
+      }
     }
     return result;
   }
@@ -240,6 +277,7 @@ class _LevelSelectScreenState extends State<LevelSelectScreen> {
                 _buildSectionedGrid(
                   levels: newLevels,
                   emptyMessage: 'Alle Level geschafft! \u{1F389}',
+                  scrollController: _newLevelsScrollController,
                 ),
                 _buildSectionedGrid(
                   levels: completed,
@@ -258,14 +296,15 @@ class _LevelSelectScreenState extends State<LevelSelectScreen> {
   Widget _buildSectionedGrid({
     required List<int> levels,
     required String emptyMessage,
+    ScrollController? scrollController,
   }) {
     if (levels.isEmpty) {
       return Center(
         child: Text(
           emptyMessage,
-          style: const TextStyle(
-            color: Colors.white70,
+          style: EmojiText.emojiStyle(
             fontSize: 18,
+            base: const TextStyle(color: Colors.white70),
           ),
         ),
       );
@@ -330,7 +369,7 @@ class _LevelSelectScreenState extends State<LevelSelectScreen> {
             crossAxisCount: 2,
             mainAxisSpacing: 14,
             crossAxisSpacing: 14,
-            childAspectRatio: 1.3,
+            childAspectRatio: 2.4,
           ),
           delegate: SliverChildBuilderDelegate(
             (context, index) => _buildLevelTile(sectionLevels[index]),
@@ -351,7 +390,10 @@ class _LevelSelectScreenState extends State<LevelSelectScreen> {
     // Bottom padding.
     slivers.add(const SliverPadding(padding: EdgeInsets.only(bottom: 24)));
 
-    return CustomScrollView(slivers: slivers);
+    return CustomScrollView(
+      controller: scrollController,
+      slivers: slivers,
+    );
   }
 
   /// Builds a trophy separator banner between level sections.
@@ -384,9 +426,9 @@ class _LevelSelectScreenState extends State<LevelSelectScreen> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(
+            EmojiText(
               completed ? '\u{1F3C6}' : '\u{1F512}',
-              style: const TextStyle(fontSize: 26),
+              fontSize: 26,
             ),
             const SizedBox(width: 12),
             Text(
@@ -401,9 +443,9 @@ class _LevelSelectScreenState extends State<LevelSelectScreen> {
               ),
             ),
             const SizedBox(width: 12),
-            Text(
+            EmojiText(
               completed ? '\u{1F3C6}' : '\u{1F512}',
-              style: const TextStyle(fontSize: 26),
+              fontSize: 26,
             ),
           ],
         ),
@@ -463,47 +505,48 @@ class _LevelSelectScreenState extends State<LevelSelectScreen> {
                 ]
               : null,
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            if (!unlocked)
-              const Text('\u{1F512}', style: TextStyle(fontSize: 32))
-            else if (noMoves) ...[
-              const Text('\u{1F512}', style: TextStyle(fontSize: 32)),
-              const SizedBox(height: 4),
-              const Text(
-                'Keine Moves',
-                key: Key('no_moves_hint'),
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.redAccent,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ] else ...[
-              Text(
-                '$levelNumber',
-                style: TextStyle(
-                  color: unlocked ? Colors.white : Colors.white30,
-                  fontSize: 30,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 6),
-              _buildStars(stars),
-              if (highScore > 0) ...[
-                const SizedBox(height: 4),
-                Text(
-                  '$highScore',
-                  style: const TextStyle(
-                    color: Colors.white54,
-                    fontSize: 13,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Row(
+            children: [
+              if (!unlocked)
+                const EmojiText('\u{1F512}', fontSize: 24)
+              else if (noMoves) ...[
+                const EmojiText('\u{1F512}', fontSize: 24),
+                const SizedBox(width: 10),
+                const Text(
+                  'Keine Moves',
+                  key: Key('no_moves_hint'),
+                  style: TextStyle(
+                    color: Colors.redAccent,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
+              ] else ...[
+                Text(
+                  '$levelNumber',
+                  style: TextStyle(
+                    color: unlocked ? Colors.white : Colors.white30,
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                _buildStars(stars),
+                if (highScore > 0) ...[
+                  const Spacer(),
+                  Text(
+                    '$highScore',
+                    style: const TextStyle(
+                      color: Colors.white54,
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
               ],
             ],
-          ],
+          ),
         ),
       ),
     );

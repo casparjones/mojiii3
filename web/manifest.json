@@ -1,11 +1,11 @@
 {
-    "name": "match3",
-    "short_name": "match3",
+    "name": "Mojiii 3",
+    "short_name": "Mojiii 3",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A candy crush clone",
+    "description": "Mojiii 3 - A candy crush style match-3 puzzle game",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

@@ -4,9 +4,9 @@ import 'package:match3/game/save_system.dart';
 
 void main() {
   group('SaveState bonusMoves and regeneration', () {
-    test('bonusMoves defaults to 0', () {
+    test('bonusMoves defaults to 60 (maxBonusMoves) on fresh save', () {
       final save = SaveState();
-      expect(save.bonusMoves, 0);
+      expect(save.bonusMoves, SaveState.defaultMaxBonusMoves);
     });
 
     test('lastMoveRegenTime defaults to null', () {
@@ -23,7 +23,7 @@ void main() {
     });
 
     test('regenerateMoves adds 1 move per 5 minutes', () {
-      final save = SaveState();
+      final save = SaveState(bonusMoves: 0);
       save.lastMoveRegenTime = DateTime.now().subtract(
         const Duration(minutes: 15),
       );
@@ -33,7 +33,7 @@ void main() {
     });
 
     test('regenerateMoves caps at maxBonusMoves (60)', () {
-      final save = SaveState();
+      final save = SaveState(bonusMoves: 0);
       save.lastMoveRegenTime = DateTime.now().subtract(
         const Duration(hours: 10),
       );
@@ -53,7 +53,7 @@ void main() {
     });
 
     test('regenerateMoves returns 0 if less than 5 minutes elapsed', () {
-      final save = SaveState();
+      final save = SaveState(bonusMoves: 0);
       save.lastMoveRegenTime = DateTime.now().subtract(
         const Duration(minutes: 4),
       );
@@ -80,7 +80,7 @@ void main() {
     });
 
     test('consumeBonusMoves returns 0 when none stored', () {
-      final save = SaveState();
+      final save = SaveState(bonusMoves: 0);
       final consumed = save.consumeBonusMoves();
       expect(consumed, 0);
     });

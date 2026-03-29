@@ -228,9 +228,13 @@ class LevelGenerator {
     final timeLimitSeconds = constraintType == LevelConstraintType.timed
         ? _calculateTimeLimit(levelNumber, difficulty)
         : 0;
-    final objective = _calculateObjective(levelNumber, difficulty, rng, gemTypeCount);
+    // Generate obstacles first so we know the count for objective validation.
     final obstacles = _generateObstacles(
       levelNumber, difficulty, rng, boardSize[0], boardSize[1],
+    );
+    final objective = _calculateObjective(
+      levelNumber, difficulty, rng, gemTypeCount,
+      obstacleCount: obstacles.length,
     );
 
     return LevelConfig(
@@ -299,13 +303,17 @@ class LevelGenerator {
   }
 
   /// Generate level objective.
+  ///
+  /// [obstacleCount] is the number of obstacles that will actually be placed
+  /// on the board, so that the destroy-obstacles target never exceeds it.
   LevelObjective _calculateObjective(
     int level,
     double difficulty,
     Random rng,
-    int gemTypeCount,
-  ) {
-    final type = _selectObjectiveType(level, rng);
+    int gemTypeCount, {
+    required int obstacleCount,
+  }) {
+    final type = _selectObjectiveType(level, rng, obstacleCount: obstacleCount);
 
     switch (type) {
       case LevelObjectiveType.score:
@@ -335,7 +343,10 @@ class LevelGenerator {
         );
 
       case LevelObjectiveType.destroyObstacles:
-        final target = (5 + difficulty * 15).round();
+        // Clamp target to the actual number of obstacles on the board so
+        // the objective is always achievable.
+        final rawTarget = (5 + difficulty * 15).round();
+        final target = rawTarget.clamp(1, obstacleCount);
         return LevelObjective(
           type: LevelObjectiveType.destroyObstacles,
           targetObstacles: target,
@@ -346,7 +357,11 @@ class LevelGenerator {
     }
   }
 
-  LevelObjectiveType _selectObjectiveType(int level, Random rng) {
+  LevelObjectiveType _selectObjectiveType(
+    int level,
+    Random rng, {
+    required int obstacleCount,
+  }) {
     if (level <= 5) return LevelObjectiveType.score;
     if (level <= 10) {
       return level % 2 == 0
@@ -357,6 +372,8 @@ class LevelGenerator {
     final roll = rng.nextInt(100);
     if (roll < 40) return LevelObjectiveType.score;
     if (roll < 70) return LevelObjectiveType.collectGems;
+    // Only allow destroyObstacles if there are enough obstacles on the board.
+    if (obstacleCount < 3) return LevelObjectiveType.score;
     return LevelObjectiveType.destroyObstacles;
   }
 

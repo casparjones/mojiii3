@@ -13,23 +13,27 @@ class GameSettings {
   bool soundEnabled;
   bool musicEnabled;
   bool vibrationEnabled;
+  bool debugMode;
 
   GameSettings({
     this.soundEnabled = true,
     this.musicEnabled = true,
     this.vibrationEnabled = true,
+    this.debugMode = false,
   });
 
   Map<String, dynamic> toJson() => {
         'soundEnabled': soundEnabled,
         'musicEnabled': musicEnabled,
         'vibrationEnabled': vibrationEnabled,
+        'debugMode': debugMode,
       };
 
   factory GameSettings.fromJson(Map<String, dynamic> json) => GameSettings(
         soundEnabled: json['soundEnabled'] as bool? ?? true,
         musicEnabled: json['musicEnabled'] as bool? ?? true,
         vibrationEnabled: json['vibrationEnabled'] as bool? ?? true,
+        debugMode: json['debugMode'] as bool? ?? false,
       );
 }
 
@@ -214,6 +218,13 @@ class GameStateManager extends ChangeNotifier {
     _scheduleSave();
   }
 
+  /// Toggle debug mode on/off.
+  void toggleDebugMode() {
+    _settings.debugMode = !_settings.debugMode;
+    notifyListeners();
+    _scheduleSave();
+  }
+
   // ---------------------------------------------------------------------------
   // Emoji theme
   // ---------------------------------------------------------------------------
@@ -275,6 +286,96 @@ class GameStateManager extends ChangeNotifier {
   }
 
   // ---------------------------------------------------------------------------
+  // Daily Chest
+  // ---------------------------------------------------------------------------
+
+  /// Whether the daily chest can be claimed right now.
+  bool get canClaimDailyChest {
+    final today = DateTime.now().toIso8601String().substring(0, 10);
+    return _saveState.canClaimDailyChest(today);
+  }
+
+  /// Claim the daily chest. Returns the reward description map, or null if
+  /// already claimed today.
+  ///
+  /// Possible rewards (weighted):
+  /// - coins (50%) : 50-200 coins
+  /// - powerup (25%) : 1x random powerup
+  /// - theme (15%) : unlock a random locked theme
+  /// - bonus_moves (10%) : 5-15 bonus moves
+  Map<String, dynamic>? claimDailyChest() {
+    final today = DateTime.now().toIso8601String().substring(0, 10);
+    if (!_saveState.canClaimDailyChest(today)) return null;
+
+    _saveState.markDailyChestClaimed(today);
+
+    final reward = _rollDailyChestReward();
+    _applyReward(reward);
+
+    notifyListeners();
+    _scheduleSave();
+    return reward;
+  }
+
+  Map<String, dynamic> _rollDailyChestReward() {
+    final rng = DateTime.now().microsecondsSinceEpoch;
+    final roll = (rng % 100);
+
+    if (roll < 50) {
+      // Coins: 50-200 in steps of 25
+      final amounts = [50, 75, 100, 125, 150, 175, 200];
+      final amount = amounts[(rng ~/ 100) % amounts.length];
+      return {'type': 'coins', 'amount': amount};
+    } else if (roll < 75) {
+      // Powerup
+      const powerups = [
+        'powerup_extra_moves',
+        'powerup_shuffle',
+        'powerup_color_bomb',
+      ];
+      final id = powerups[(rng ~/ 100) % powerups.length];
+      return {'type': 'powerup', 'id': id};
+    } else if (roll < 90) {
+      // Theme - pick a random theme that is not yet unlocked
+      final locked = EmojiTheme.allThemes
+          .where((t) =>
+              t.id != 'theme_fruit' &&
+              !_saveState.unlockedExtras.contains(t.id))
+          .toList();
+      if (locked.isNotEmpty) {
+        final theme = locked[(rng ~/ 100) % locked.length];
+        return {'type': 'theme', 'id': theme.id, 'name': theme.name};
+      }
+      // All themes unlocked -> fall back to coins
+      return {'type': 'coins', 'amount': 200};
+    } else {
+      // Bonus moves: 5-15
+      final amounts = [5, 8, 10, 12, 15];
+      final amount = amounts[(rng ~/ 100) % amounts.length];
+      return {'type': 'bonus_moves', 'amount': amount};
+    }
+  }
+
+  void _applyReward(Map<String, dynamic> reward) {
+    switch (reward['type'] as String) {
+      case 'coins':
+        _saveState.coins += reward['amount'] as int;
+        break;
+      case 'powerup':
+        _saveState.addPowerUp(reward['id'] as String);
+        break;
+      case 'theme':
+        _saveState.unlockExtra(reward['id'] as String);
+        break;
+      case 'bonus_moves':
+        final amount = reward['amount'] as int;
+        _saveState.bonusMoves =
+            (_saveState.bonusMoves + amount).clamp(0, _saveState.maxBonusMoves);
+        break;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Persistence
   // ---------------------------------------------------------------------------
 
@@ -294,6 +395,9 @@ class GameStateManager extends ChangeNotifier {
     }
     _isLoaded = true;
     _syncTheme();
+    // Regenerate bonus moves based on offline time so the home screen shows
+    // the correct value immediately.
+    regenerateMoves();
     notifyListeners();
   }
 

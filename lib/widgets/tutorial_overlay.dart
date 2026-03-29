@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'emoji_text.dart';
 
 /// A single step in the tutorial.
 class TutorialStep {
@@ -170,9 +171,9 @@ class TutorialOverlayState extends State<TutorialOverlay>
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       // Emoji
-                      Text(
+                      EmojiText(
                         step.emoji,
-                        style: const TextStyle(fontSize: 64),
+                        fontSize: 64,
                       ),
                       const SizedBox(height: 24),
 

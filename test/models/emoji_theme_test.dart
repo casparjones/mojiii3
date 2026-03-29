@@ -48,11 +48,24 @@ void main() {
       expect(EmojiTheme.byId('unknown'), EmojiTheme.fruit);
     });
 
-    test('allThemes contains all three themes', () {
-      expect(EmojiTheme.allThemes.length, 3);
+    test('allThemes contains all themes', () {
+      expect(EmojiTheme.allThemes.length, 16);
       expect(EmojiTheme.allThemes, contains(EmojiTheme.fruit));
       expect(EmojiTheme.allThemes, contains(EmojiTheme.animals));
       expect(EmojiTheme.allThemes, contains(EmojiTheme.space));
+      expect(EmojiTheme.allThemes, contains(EmojiTheme.tools));
+      expect(EmojiTheme.allThemes, contains(EmojiTheme.hands));
+      expect(EmojiTheme.allThemes, contains(EmojiTheme.people));
+      expect(EmojiTheme.allThemes, contains(EmojiTheme.cats));
+      expect(EmojiTheme.allThemes, contains(EmojiTheme.hearts));
+      expect(EmojiTheme.allThemes, contains(EmojiTheme.professions));
+      expect(EmojiTheme.allThemes, contains(EmojiTheme.flowers));
+      expect(EmojiTheme.allThemes, contains(EmojiTheme.weather));
+      expect(EmojiTheme.allThemes, contains(EmojiTheme.moon));
+      expect(EmojiTheme.allThemes, contains(EmojiTheme.food));
+      expect(EmojiTheme.allThemes, contains(EmojiTheme.party));
+      expect(EmojiTheme.allThemes, contains(EmojiTheme.landmarks));
+      expect(EmojiTheme.allThemes, contains(EmojiTheme.flags));
     });
 
     test('active defaults to fruit', () {

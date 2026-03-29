@@ -5,7 +5,7 @@ import 'package:match3/game/save_system.dart';
 void main() {
   group('GameStateManager bonus moves', () {
     test('regenerateMoves delegates to saveState', () {
-      final save = SaveState();
+      final save = SaveState(bonusMoves: 0);
       save.lastMoveRegenTime = DateTime.now().subtract(
         const Duration(minutes: 10),
       );
@@ -17,7 +17,7 @@ void main() {
     });
 
     test('regenerateMoves returns 0 when nothing to regenerate', () {
-      final save = SaveState();
+      final save = SaveState(bonusMoves: 0);
       save.lastMoveRegenTime = DateTime.now().subtract(
         const Duration(minutes: 4),
       );

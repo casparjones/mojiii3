@@ -216,6 +216,46 @@ void main() {
       expect(cleared.length, 4);
     });
 
+    test('cross bomb clears entire row and column', () {
+      final board = Board.fromGrid([
+        [_r, _b, _g, _y],
+        [_p, const Gem(type: GemType.red, special: SpecialType.crossBomb), _b, _g],
+        [_g, _y, _p, _r],
+        [_b, _r, _g, _y],
+      ]);
+      final cleared = handler.activate(board, const Position(1, 1));
+      // Entire row 1: (1,0),(1,1),(1,2),(1,3)
+      // Entire col 1: (0,1),(1,1),(2,1),(3,1)
+      // Union = 7 unique positions
+      expect(cleared.length, 7);
+      // Row 1
+      for (var c = 0; c < 4; c++) {
+        expect(cleared, contains(Position(1, c)));
+      }
+      // Col 1
+      for (var r = 0; r < 4; r++) {
+        expect(cleared, contains(Position(r, 1)));
+      }
+    });
+
+    test('cross bomb at corner clears row and column', () {
+      final board = Board.fromGrid([
+        [const Gem(type: GemType.red, special: SpecialType.crossBomb), _b, _g],
+        [_p, _r, _b],
+        [_g, _y, _p],
+      ]);
+      final cleared = handler.activate(board, const Position(0, 0));
+      // Row 0: (0,0),(0,1),(0,2)
+      // Col 0: (0,0),(1,0),(2,0)
+      // Union = 5 unique positions
+      expect(cleared.length, 5);
+      expect(cleared, contains(const Position(0, 0)));
+      expect(cleared, contains(const Position(0, 1)));
+      expect(cleared, contains(const Position(0, 2)));
+      expect(cleared, contains(const Position(1, 0)));
+      expect(cleared, contains(const Position(2, 0)));
+    });
+
     test('normal gem returns just its position', () {
       final board = Board.fromGrid([
         [_r, _b],

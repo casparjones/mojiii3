@@ -48,6 +48,10 @@ enum SpecialType {
   /// Created by matching in L or T shape. Explodes a 3x3 area.
   bomb,
 
+  /// Cross bomb: clears entire row AND entire column (cross shape).
+  /// Dropped by combo chance during cascades.
+  crossBomb,
+
   /// Created by matching 5 in a row. Clears all gems of a chosen color.
   rainbow,
 }

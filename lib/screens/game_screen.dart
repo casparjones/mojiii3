@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 
@@ -16,9 +17,14 @@ import '../game/level_generator.dart';
 import '../game/match_detector.dart';
 import '../game/obstacle_manager.dart';
 import '../game/save_system.dart';
+import '../game/combo_bomb_dropper.dart';
 import '../game/score_calculator.dart';
+import '../game/special_gem_handler.dart';
 import '../game/store_config.dart';
 import '../game/background_manager.dart';
+import '../widgets/confetti_overlay.dart';
+import '../widgets/emoji_text.dart';
+import '../widgets/spin_wheel.dart';
 import 'package:share_plus/share_plus.dart';
 
 /// Temporary floating reward text shown above the board.
@@ -37,6 +43,29 @@ class _FloatingReward {
   /// Whether this reward has expired (after 1.5 seconds).
   bool get isExpired =>
       DateTime.now().difference(createdAt).inMilliseconds > 1500;
+}
+
+/// Tracks an obstacle that is being destroyed with an animation.
+class _DestroyingObstacle {
+  final ObstacleType type;
+
+  const _DestroyingObstacle({required this.type});
+}
+
+/// A gem flying from one position to another during shuffle.
+class _ShuffleFlightGem {
+  final Gem gem;
+  final Position from;
+  final Position to;
+  /// Random curve offset for varied flight paths.
+  final double curveOffset;
+
+  const _ShuffleFlightGem({
+    required this.gem,
+    required this.from,
+    required this.to,
+    required this.curveOffset,
+  });
 }
 
 class GameScreen extends StatefulWidget {
@@ -89,6 +118,7 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   late ScoreCalculator _scoreCalculator;
   late DeadlockDetector _deadlockDetector;
   late ObstacleManager _obstacleManager;
+  late ComboBombDropper _comboBombDropper;
 
   int _score = 0;
   int _movesUsed = 0;
@@ -105,6 +135,11 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   double _swipeCellW = 0;
   double _swipeCellH = 0;
   Set<Position> _matchedPositions = {};
+  /// Obstacles currently playing their destruction animation (scale down + fade).
+  Map<Position, _DestroyingObstacle> _destroyingObstacles = {};
+  /// Shuffle flight animation state.
+  List<_ShuffleFlightGem>? _shuffleFlights;
+  AnimationController? _shuffleController;
   String? _comboText;
   double _comboX = 0.5;
   double _comboY = 0.5;
@@ -117,6 +152,9 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
 
   late AnimationController _comboAnimController;
   Timer? _comboFadeOutTimer;
+  Timer? _autoHintTimer;
+  late AnimationController _hintGlimmerController;
+  final GlobalKey<ConfettiOverlayState> _confettiKey = GlobalKey<ConfettiOverlayState>();
 
   /// Whether we are in level mode (vs free/endless mode).
   bool get _isLevelMode => widget.levelConfig != null;
@@ -135,6 +173,7 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     _scoreCalculator = const ScoreCalculator();
     _deadlockDetector = const DeadlockDetector();
     _obstacleManager = ObstacleManager();
+    _comboBombDropper = ComboBombDropper();
     _animController = BoardAnimationController(vsync: this);
     _animController.addListener(() {
       if (mounted) setState(() {});
@@ -146,6 +185,13 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     );
     _comboAnimController.addListener(() {
       if (mounted) setState(() {});
+    });
+    _hintGlimmerController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    );
+    _hintGlimmerController.addListener(() {
+      if (mounted && _hintPositions.isNotEmpty) setState(() {});
     });
     _initBoard();
   }
@@ -161,7 +207,10 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     _audioManager.dispose();
     _animController.dispose();
     _comboAnimController.dispose();
+    _hintGlimmerController.dispose();
+    _shuffleController?.dispose();
     _comboFadeOutTimer?.cancel();
+    _autoHintTimer?.cancel();
     super.dispose();
   }
 
@@ -188,7 +237,7 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     _obstaclesDestroyed = 0;
     _gemsCollectedByType = {};
     _selected = null;
-    _hintPositions = {};
+    _clearHints();
     _matchedPositions = {};
     _dismissComboToast();
     _levelEnded = false;
@@ -205,6 +254,9 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       saveState.regenerateMoves();
     }
 
+    // Start auto-hint timer.
+    _resetAutoHintTimer();
+
     // Ensure music resumes when (re)starting a level.
     _musicManager?.resume();
   }
@@ -213,6 +265,9 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     if (_processing || _levelEnded) return;
 
     final tapped = Position(row, col);
+
+    // Reset auto-hint timer on any interaction.
+    _resetAutoHintTimer();
 
     // Don't allow selecting cells blocked by stone obstacles.
     if (_obstacleManager.blocksCell(tapped)) return;
@@ -224,9 +279,9 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
 
     if (_selected == null) {
       _audioManager.playTap();
+      _clearHints();
       setState(() {
         _selected = tapped;
-        _hintPositions = {};
         _dismissComboToast();
       });
       return;
@@ -263,9 +318,9 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     _swipeCellH = cellH;
     // Clear tap selection when starting a swipe.
     if (_selected != null) {
+      _clearHints();
       setState(() {
         _selected = null;
-        _hintPositions = {};
       });
     }
   }
@@ -310,11 +365,11 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   }
 
   Future<void> _executeSwap(Position a, Position b) async {
+    _clearHints();
     setState(() {
       _processing = true;
       _selected = null;
       _dismissComboToast();
-      _hintPositions = {};
     });
 
     // Check if swap would produce a match.
@@ -373,6 +428,7 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       _endFreeMode();
     }
 
+    _resetAutoHintTimer();
     setState(() => _processing = false);
   }
 
@@ -425,13 +481,22 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       );
       totalScore += stepScore.stepTotal;
 
-      // Process obstacles.
+      // Process obstacles — but don't cleanup yet, animate first.
       final obstacleResult = _obstacleManager.processMatches(
         allMatchedPos,
         _rows,
         _cols,
       );
       _obstaclesDestroyed += obstacleResult.destroyedCount;
+
+      // Track destroyed obstacles for animation before cleanup.
+      final destroyedObstacleTypes = <Position, ObstacleType>{};
+      for (final pos in obstacleResult.destroyed) {
+        final obs = _obstacleManager.obstacleAt(pos);
+        if (obs != null) {
+          destroyedObstacleTypes[pos] = obs.type;
+        }
+      }
       _obstacleManager.cleanupDestroyed();
 
       // Play sound for match/combo.
@@ -441,13 +506,64 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
         _audioManager.playMatch();
       }
 
-      // Animate match.
-      setState(() => _matchedPositions = allMatchedPos);
-      await _animController.animateMatch(allMatchedPos);
+      // Activate special gems caught in the match (bombs, cross bombs, etc.).
+      final specialHandler = const SpecialGemHandler();
+      final expandedPositions = Set<Position>.from(allMatchedPos);
+      final specialActivationCenters = <Position>[];
+      for (final pos in allMatchedPos) {
+        final gem = _board.gemAt(pos);
+        if (gem != null && gem.special != SpecialType.none) {
+          final affected = specialHandler.activate(_board, pos);
+          if (affected.isNotEmpty) {
+            specialActivationCenters.add(pos);
+            expandedPositions.addAll(affected);
+          }
+        }
+      }
 
-      // Remove matched gems.
-      _board.removeGems(allMatchedPos);
-      setState(() => _matchedPositions = {});
+      // Trigger explosion confetti for bomb/special activations.
+      for (final center in specialActivationCenters) {
+        _triggerExplosionConfetti(center);
+      }
+
+      // Start obstacle destruction: add to match animation + confetti burst.
+      if (destroyedObstacleTypes.isNotEmpty) {
+        setState(() {
+          _destroyingObstacles = {
+            for (final entry in destroyedObstacleTypes.entries)
+              entry.key: _DestroyingObstacle(type: entry.value),
+          };
+        });
+        // Trigger confetti for each destroyed obstacle.
+        for (final entry in destroyedObstacleTypes.entries) {
+          final colors = _obstacleConfettiColors(entry.value);
+          _triggerPositionConfetti(entry.key, colors);
+        }
+        // Include obstacle positions in the match animation so they pop too.
+        expandedPositions.addAll(destroyedObstacleTypes.keys);
+      }
+
+      // Trigger confetti for each matched gem.
+      for (final pos in expandedPositions) {
+        final gem = _board.gemAt(pos);
+        if (gem != null) {
+          _triggerPositionConfetti(
+            pos,
+            [gemTypeToColor(gem.type.name), Colors.white],
+          );
+        }
+      }
+
+      // Animate match (gems + obstacles pop together).
+      setState(() => _matchedPositions = expandedPositions);
+      await _animController.animateMatch(expandedPositions);
+
+      // Remove matched gems (including those cleared by special activation).
+      _board.removeGems(expandedPositions);
+      setState(() {
+        _matchedPositions = {};
+        _destroyingObstacles = {};
+      });
 
       // Calculate fall moves.
       final fallMoves = _calculateFallMoves();
@@ -473,6 +589,19 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
 
       // Refill.
       _gravityHandler.refill(_board);
+
+      // Combo bomb drop: chance to spawn a bomb gem during cascades.
+      if (cascadeLevel >= 2 && spawnPositions.isNotEmpty) {
+        final bombDrop = _comboBombDropper.tryDrop(
+          cascadeLevel: cascadeLevel,
+          board: _board,
+          emptyPositions: spawnPositions,
+        );
+        if (bombDrop != null) {
+          _board.setGem(bombDrop.position, bombDrop.gem);
+        }
+      }
+
       setState(() {});
 
       // Animate spawn.
@@ -494,6 +623,14 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
           '${cascadeLevel}x Combo!',
           x: comboAvgCol / _cols,
           y: comboAvgRow / _rows,
+        );
+
+        // Trigger confetti burst at the combo position.
+        _triggerConfetti(
+          relX: comboAvgCol / _cols,
+          relY: comboAvgRow / _rows,
+          comboLevel: cascadeLevel,
+          matches: matches,
         );
       }
     }
@@ -542,6 +679,105 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
         });
       }
     });
+  }
+
+  /// Triggers a confetti burst at the given relative board position.
+  void _triggerConfetti({
+    required double relX,
+    required double relY,
+    required int comboLevel,
+    required List<Match> matches,
+  }) {
+    final confettiState = _confettiKey.currentState;
+    if (confettiState == null) return;
+
+    // Get the confetti overlay's render box to compute pixel coordinates.
+    final renderBox =
+        _confettiKey.currentContext?.findRenderObject() as RenderBox?;
+    if (renderBox == null || !renderBox.hasSize) return;
+
+    final size = renderBox.size;
+    final origin = Offset(relX * size.width, relY * size.height);
+
+    // Derive confetti colors from matched gem types.
+    final matchColors = <Color>{};
+    for (final m in matches) {
+      matchColors.add(gemTypeToColor(m.gemType.name));
+    }
+    // Add white/gold accents for visual flair.
+    final colors = [
+      ...matchColors,
+      Colors.white,
+      Colors.amber,
+    ];
+
+    confettiState.trigger(
+      origin: origin,
+      comboLevel: comboLevel,
+      colors: colors,
+    );
+  }
+
+  /// Triggers a red/orange explosion confetti for bomb & special gem activations.
+  void _triggerExplosionConfetti(Position center) {
+    final confettiState = _confettiKey.currentState;
+    if (confettiState == null) return;
+
+    final renderBox =
+        _confettiKey.currentContext?.findRenderObject() as RenderBox?;
+    if (renderBox == null || !renderBox.hasSize) return;
+
+    final size = renderBox.size;
+    final relX = (center.col + 0.5) / _cols;
+    final relY = (center.row + 0.5) / _rows;
+    final origin = Offset(relX * size.width, relY * size.height);
+
+    confettiState.trigger(
+      origin: origin,
+      comboLevel: 3,
+      colors: const [
+        Colors.red,
+        Colors.deepOrange,
+        Colors.orange,
+        Colors.amber,
+        Colors.yellow,
+      ],
+    );
+  }
+
+  /// Triggers a small confetti burst at a board position with given colors.
+  void _triggerPositionConfetti(Position pos, List<Color> colors) {
+    final confettiState = _confettiKey.currentState;
+    if (confettiState == null) return;
+
+    final renderBox =
+        _confettiKey.currentContext?.findRenderObject() as RenderBox?;
+    if (renderBox == null || !renderBox.hasSize) return;
+
+    final size = renderBox.size;
+    final relX = (pos.col + 0.5) / _cols;
+    final relY = (pos.row + 0.5) / _rows;
+    final origin = Offset(relX * size.width, relY * size.height);
+
+    confettiState.trigger(
+      origin: origin,
+      comboLevel: 2,
+      colors: colors,
+    );
+  }
+
+  /// Returns confetti colors for an obstacle type.
+  List<Color> _obstacleConfettiColors(ObstacleType type) {
+    switch (type) {
+      case ObstacleType.ice:
+        return const [Colors.lightBlue, Colors.cyan, Colors.white, Colors.blueAccent];
+      case ObstacleType.stone:
+        return const [Colors.grey, Colors.brown, Colors.blueGrey, Colors.white70];
+      case ObstacleType.chain:
+        return const [Colors.amber, Colors.grey, Colors.yellow, Colors.white];
+      case ObstacleType.slime:
+        return const [Colors.green, Colors.lightGreen, Colors.lime, Colors.white];
+    }
   }
 
   void _checkLevelEnd() {
@@ -614,10 +850,59 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
 
     // Show dialog after frame.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        _showLevelEndDialog(won, stars, coinsEarned);
+      if (!mounted) return;
+      if (won) {
+        _celebrateWin(stars, coinsEarned);
+      } else {
+        _showLevelEndDialog(false, stars, coinsEarned);
       }
     });
+  }
+
+  /// Celebrate a level win with confetti explosions, then show the dialog.
+  Future<void> _celebrateWin(int stars, int coinsEarned) async {
+    final confettiState = _confettiKey.currentState;
+    final renderBox =
+        _confettiKey.currentContext?.findRenderObject() as RenderBox?;
+
+    if (confettiState != null && renderBox != null && renderBox.hasSize) {
+      final size = renderBox.size;
+      final rng = Random();
+
+      // Fire multiple confetti bursts across the board.
+      for (int i = 0; i < 5; i++) {
+        final origin = Offset(
+          rng.nextDouble() * size.width,
+          rng.nextDouble() * size.height,
+        );
+        confettiState.trigger(
+          origin: origin,
+          comboLevel: 4,
+          colors: const [
+            Colors.amber,
+            Colors.yellow,
+            Colors.orange,
+            Colors.red,
+            Colors.purple,
+            Colors.blue,
+            Colors.green,
+            Colors.white,
+          ],
+        );
+        await Future.delayed(const Duration(milliseconds: 200));
+        if (!mounted) return;
+      }
+
+      // Let confetti play for a moment before showing dialog.
+      await Future.delayed(const Duration(milliseconds: 600));
+      if (!mounted) return;
+    }
+
+    if (_levelConfig?.isBossLevel == true) {
+      _showBossVictoryWheel(stars, coinsEarned);
+    } else {
+      _showLevelEndDialog(true, stars, coinsEarned);
+    }
   }
 
   /// End the free/endless mode game when moves run out.
@@ -695,8 +980,69 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     final lvl = widget.levelNumber ?? 0;
     final storeUrl = await StoreConfig.getStoreUrl();
     final text =
-        'Ich habe Level $lvl in Match3 geschafft! Probier es auch: $storeUrl';
+        'Ich habe Level $lvl in Mojiii 3 geschafft! Probier es auch: $storeUrl';
     await Share.share(text);
+  }
+
+  /// Show the spin wheel after defeating a boss, then the level end dialog.
+  void _showBossVictoryWheel(int stars, int coinsEarned) {
+    final bossInfo = _levelConfig?.bossInfo;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => SpinWheelDialog(
+        key: const Key('boss_spin_wheel_dialog'),
+        segments: defaultBossWheelSegments(),
+        bossEmoji: bossInfo?.emoji ?? '',
+        bossName: bossInfo?.name ?? '',
+        onSpinComplete: (result) {
+          _applySpinReward(result);
+        },
+      ),
+    ).then((_) {
+      // After the spin wheel is closed, show the regular level end dialog.
+      if (mounted) {
+        _showLevelEndDialog(true, stars, coinsEarned);
+      }
+    });
+  }
+
+  /// Apply the reward from the spin wheel to the player's inventory.
+  void _applySpinReward(SpinResult result) {
+    final seg = result.segment;
+    final saveState = widget.saveState;
+
+    switch (seg.rewardType) {
+      case WheelRewardType.coins:
+        // Add coins via GameStateManager if available, otherwise via SaveState.
+        try {
+          final gsm = GameStateManagerProvider.read(context);
+          gsm.addCoins(seg.rewardValue);
+        } catch (_) {
+          if (saveState != null) {
+            saveState.coins += seg.rewardValue;
+          }
+        }
+        break;
+      case WheelRewardType.powerUp:
+        if (seg.powerUpId != null) {
+          if (saveState != null) {
+            saveState.addPowerUp(seg.powerUpId!);
+          }
+          // Notify external listeners that power-up inventory changed.
+          widget.onPowerUpUsed?.call();
+          try {
+            final gsm = GameStateManagerProvider.read(context);
+            gsm.persistState();
+          } catch (_) {
+            // No provider available (e.g. in tests).
+          }
+        }
+        break;
+      case WheelRewardType.emoji:
+        // Emoji collection rewards can be handled in the future.
+        break;
+    }
   }
 
   void _showLevelEndDialog(bool won, int stars, int coinsEarned) {
@@ -708,7 +1054,7 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
         backgroundColor: const Color(0xFF1a1a2e),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(
-          won ? 'Level Complete!' : 'Level Failed',
+          won ? 'Congratulations!' : 'Level Failed',
           textAlign: TextAlign.center,
           style: TextStyle(
             color: won ? Colors.amberAccent : Colors.redAccent,
@@ -720,10 +1066,10 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
           mainAxisSize: MainAxisSize.min,
           children: [
             if (showTrophy) ...[
-              const Text(
+              const EmojiText(
                 '\uD83C\uDFC6',
                 key: Key('trophy_icon'),
-                style: TextStyle(fontSize: 64),
+                fontSize: 64,
               ),
               const SizedBox(height: 4),
               Text(
@@ -767,13 +1113,13 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                 Text(
                   '+$_farmingCoins \uD83E\uDE99 Coins',
                   key: const Key('farming_coins_summary'),
-                  style: const TextStyle(color: Colors.amberAccent, fontSize: 14),
+                  style: EmojiText.emojiStyle(fontSize: 14, base: const TextStyle(color: Colors.amberAccent)),
                 ),
               if (_farmingMoves > 0)
                 Text(
                   '+$_farmingMoves \uD83D\uDC8A Bonus Moves',
                   key: const Key('farming_moves_summary'),
-                  style: const TextStyle(color: Colors.greenAccent, fontSize: 14),
+                  style: EmojiText.emojiStyle(fontSize: 14, base: const TextStyle(color: Colors.greenAccent)),
                 ),
             ],
             if (!won && widget.coinBalance != null) ...[
@@ -881,13 +1227,41 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   }
 
   void _showHint() {
-    final hint = _deadlockDetector.findHint(_board);
+    // Find all hints and filter out any involving blocked/locked positions.
+    final allHints = _deadlockDetector.findAllHints(_board);
+    final validHints = allHints.where((h) =>
+        !_obstacleManager.isLocked(h.from) &&
+        !_obstacleManager.isLocked(h.to) &&
+        !_obstacleManager.blocksCell(h.from) &&
+        !_obstacleManager.blocksCell(h.to)).toList();
+
+    final hint = validHints.isNotEmpty ? validHints.first : null;
     if (hint != null) {
       setState(() {
         _hintPositions = {hint.from, hint.to};
         _selected = null;
       });
+      _hintGlimmerController.repeat();
+      _resetAutoHintTimer();
     }
+  }
+
+  void _clearHints() {
+    if (_hintPositions.isEmpty) return;
+    _hintPositions = {};
+    _hintGlimmerController.stop();
+    _hintGlimmerController.reset();
+  }
+
+  /// Resets (or starts) the 30-second auto-hint timer.
+  void _resetAutoHintTimer() {
+    _autoHintTimer?.cancel();
+    if (_levelEnded || _processing) return;
+    _autoHintTimer = Timer(const Duration(seconds: 30), () {
+      if (mounted && !_processing && !_levelEnded && _hintPositions.isEmpty) {
+        _showHint();
+      }
+    });
   }
 
   String _specialIndicator(SpecialType special) {
@@ -900,6 +1274,8 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
         return '\u2195';
       case SpecialType.bomb:
         return '\uD83D\uDCA3';
+      case SpecialType.crossBomb:
+        return '\u271A';
       case SpecialType.rainbow:
         return '\u2728';
     }
@@ -989,14 +1365,93 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     widget.onPowerUpUsed?.call();
   }
 
-  /// Use the Shuffle power-up: shuffles the board.
-  void _useShuffle() {
+  /// Use the Shuffle power-up: gems visibly fly along curved paths to new positions.
+  Future<void> _useShuffle() async {
     if (_processing || _levelEnded) return;
     final saveState = widget.saveState;
     if (saveState == null || !saveState.usePowerUp(powerUpShuffle)) return;
-    _deadlockDetector.shuffleBoard(_board);
-    setState(() {});
+    setState(() => _processing = true);
     widget.onPowerUpUsed?.call();
+
+    final rng = Random();
+
+    // Capture before-state: map each type to a list of positions.
+    final beforeByType = <GemType, List<Position>>{};
+    for (var r = 0; r < _rows; r++) {
+      for (var c = 0; c < _cols; c++) {
+        final gem = _board.gemAt(Position(r, c));
+        if (gem != null) {
+          beforeByType.putIfAbsent(gem.type, () => []).add(Position(r, c));
+        }
+      }
+    }
+
+    // Capture before gems with positions for rendering during flight.
+    final beforeGems = <Position, Gem>{};
+    for (var r = 0; r < _rows; r++) {
+      for (var c = 0; c < _cols; c++) {
+        final gem = _board.gemAt(Position(r, c));
+        if (gem != null) beforeGems[Position(r, c)] = gem;
+      }
+    }
+
+    // Perform the shuffle.
+    _deadlockDetector.shuffleBoard(_board);
+
+    // Capture after-state and match positions per type.
+    final afterByType = <GemType, List<Position>>{};
+    for (var r = 0; r < _rows; r++) {
+      for (var c = 0; c < _cols; c++) {
+        final gem = _board.gemAt(Position(r, c));
+        if (gem != null) {
+          afterByType.putIfAbsent(gem.type, () => []).add(Position(r, c));
+        }
+      }
+    }
+
+    // Build flight paths: for each type, pair old→new positions.
+    final flights = <_ShuffleFlightGem>[];
+    for (final type in beforeByType.keys) {
+      final fromList = beforeByType[type]!;
+      final toList = afterByType[type] ?? [];
+      for (var i = 0; i < fromList.length && i < toList.length; i++) {
+        final gem = beforeGems[fromList[i]];
+        if (gem != null) {
+          flights.add(_ShuffleFlightGem(
+            gem: gem,
+            from: fromList[i],
+            to: toList[i],
+            curveOffset: (rng.nextDouble() - 0.5) * 3.0, // -1.5 to +1.5 cells
+          ));
+        }
+      }
+    }
+
+    // Animate: 3-second flight with curved paths.
+    final completer = Completer<void>();
+    _shuffleController?.dispose();
+    _shuffleController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 3000),
+    );
+    _shuffleController!.addListener(() {
+      if (mounted) setState(() {});
+    });
+    setState(() => _shuffleFlights = flights);
+
+    _shuffleController!.forward().then((_) {
+      if (mounted) {
+        setState(() {
+          _shuffleFlights = null;
+        });
+      }
+      completer.complete();
+    });
+
+    await completer.future;
+    _shuffleController?.dispose();
+    _shuffleController = null;
+    setState(() => _processing = false);
   }
 
   /// Use the Color Bomb power-up: shows a dialog to pick a color, then
@@ -1029,33 +1484,36 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
           textAlign: TextAlign.center,
           style: TextStyle(color: Colors.white, fontSize: 18),
         ),
-        content: Wrap(
-          alignment: WrapAlignment.center,
-          spacing: 12,
-          runSpacing: 12,
-          children: typesOnBoard.map((gemType) {
-            return GestureDetector(
-              key: Key('color_bomb_${gemType.name}'),
-              onTap: () {
-                Navigator.of(ctx).pop();
-                _executeColorBomb(gemType);
-              },
-              child: Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.white24),
+        content: SizedBox(
+          width: 220,
+          child: Wrap(
+            alignment: WrapAlignment.center,
+            spacing: 12,
+            runSpacing: 12,
+            children: typesOnBoard.map((gemType) {
+              return GestureDetector(
+                key: Key('color_bomb_${gemType.name}'),
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  _executeColorBomb(gemType);
+                },
+                child: Container(
+                  width: 60,
+                  height: 60,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.white24),
+                  ),
+                  alignment: Alignment.center,
+                  child: EmojiText(
+                    gemType.emoji,
+                    fontSize: 32,
+                  ),
                 ),
-                alignment: Alignment.center,
-                child: Text(
-                  gemType.emoji,
-                  style: const TextStyle(fontSize: 32),
-                ),
-              ),
-            );
-          }).toList(),
+              );
+            }).toList(),
+          ),
         ),
       ),
     );
@@ -1085,6 +1543,16 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       // Track gems collected by type.
       _gemsCollectedByType[targetType] =
           (_gemsCollectedByType[targetType] ?? 0) + positions.length;
+
+      // Staggered confetti explosions for each gem of the target color.
+      final sortedPositions = positions.toList()
+        ..sort((a, b) => a.row != b.row ? a.row.compareTo(b.row) : a.col.compareTo(b.col));
+      final color = gemTypeToColor(targetType.name);
+      for (final pos in sortedPositions) {
+        _triggerPositionConfetti(pos, [color, Colors.white, Colors.amber]);
+        await Future.delayed(const Duration(milliseconds: 60));
+        if (!mounted) return;
+      }
 
       // Animate the removal.
       setState(() => _matchedPositions = positions);
@@ -1201,9 +1669,9 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Text(
+                  const EmojiText(
                     '\uD83E\uDE99', // 🪙
-                    style: TextStyle(fontSize: 20),
+                    fontSize: 20,
                   ),
                   const SizedBox(width: 6),
                   Text(
@@ -1357,9 +1825,9 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       child: Row(
         children: [
           // Boss emoji
-          Text(
+          EmojiText(
             bossInfo.emoji,
-            style: const TextStyle(fontSize: 36),
+            fontSize: 36,
           ),
           const SizedBox(width: 12),
           // Name + HP bar
@@ -1391,10 +1859,14 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                             borderRadius: BorderRadius.circular(6),
                           ),
                         ),
-                        // Fill
-                        FractionallySizedBox(
+                        // Fill — animated smooth transition
+                        AnimatedFractionallySizedBox(
+                          duration: const Duration(milliseconds: 600),
+                          curve: Curves.easeInOut,
                           widthFactor: hpFraction.clamp(0.0, 1.0),
-                          child: Container(
+                          alignment: Alignment.centerLeft,
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 600),
                             decoration: BoxDecoration(
                               color: hpColor,
                               borderRadius: BorderRadius.circular(6),
@@ -1495,7 +1967,7 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
         final progress =
             _obstaclesDestroyed / objective.targetObstacles;
         return _objectiveContainer(
-          icon: '\uD83D\uDCA5', // 💥
+          icon: '\u2744\uFE0F', // ❄️ (obstacle icon — ice is the primary obstacle)
           label:
               'Destroy: $_obstaclesDestroyed / ${objective.targetObstacles}',
           progress: progress.clamp(0.0, 1.0),
@@ -1520,7 +1992,7 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(icon, style: const TextStyle(fontSize: 16)),
+          EmojiText(icon, fontSize: 16),
           const SizedBox(width: 6),
           Text(
             label,
@@ -1539,11 +2011,17 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     final animValue = _comboAnimController.value;
     // Float upward as the animation progresses.
     final yOffset = (1.0 - animValue) * 20;
-    final comboLeft = _comboX * boardWidth;
-    final comboTop = _comboY * boardHeight - yOffset;
+    // Estimate bubble dimensions for clamping.
+    const bubbleHalfWidth = 60.0;
+    const bubbleHeight = 40.0;
+    final rawLeft = _comboX * boardWidth;
+    final rawTop = _comboY * boardHeight - yOffset - 20;
+    // Clamp so the bubble stays fully visible within the board area.
+    final comboLeft = rawLeft.clamp(bubbleHalfWidth, boardWidth - bubbleHalfWidth);
+    final comboTop = rawTop.clamp(0.0, boardHeight - bubbleHeight);
     return Positioned(
       left: comboLeft,
-      top: comboTop - 20,
+      top: comboTop,
       child: FractionalTranslation(
         translation: const Offset(-0.5, 0),
         child: IgnorePointer(
@@ -1576,6 +2054,52 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     );
   }
 
+  /// Renders gems flying along curved paths during shuffle animation.
+  List<Widget> _buildShuffleFlights(double cellW, double cellH) {
+    final flights = _shuffleFlights;
+    final controller = _shuffleController;
+    if (flights == null || controller == null) return [];
+
+    final t = Curves.easeInOutCubic.transform(controller.value);
+    final widgets = <Widget>[];
+
+    for (final flight in flights) {
+      final fromX = flight.from.col * cellW;
+      final fromY = flight.from.row * cellH;
+      final toX = flight.to.col * cellW;
+      final toY = flight.to.row * cellH;
+
+      // Quadratic bezier with a curved control point offset.
+      final midX = (fromX + toX) / 2 + flight.curveOffset * cellW;
+      final midY = (fromY + toY) / 2 + flight.curveOffset * cellH;
+
+      // Quadratic bezier: P = (1-t)²·P0 + 2(1-t)t·P1 + t²·P2
+      final oneMinusT = 1.0 - t;
+      final x = oneMinusT * oneMinusT * fromX +
+          2 * oneMinusT * t * midX +
+          t * t * toX;
+      final y = oneMinusT * oneMinusT * fromY +
+          2 * oneMinusT * t * midY +
+          t * t * toY;
+
+      widgets.add(
+        Positioned(
+          left: x,
+          top: y,
+          width: cellW,
+          height: cellH,
+          child: Center(
+            child: EmojiText(
+              flight.gem.type.emoji,
+              fontSize: cellW * 0.55,
+            ),
+          ),
+        ),
+      );
+    }
+    return widgets;
+  }
+
   List<Widget> _buildFloatingRewards(double boardWidth, double boardHeight) {
     // Remove expired rewards.
     _floatingRewards.removeWhere((r) => r.isExpired);
@@ -1593,13 +2117,15 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
             child: Text(
               reward.text,
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: EmojiText.emojiStyle(
                 fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: Colors.amberAccent,
-                shadows: [
-                  Shadow(color: Colors.black, blurRadius: 4),
-                ],
+                base: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.amberAccent,
+                  shadows: [
+                    Shadow(color: Colors.black, blurRadius: 4),
+                  ],
+                ),
               ),
             ),
           ),
@@ -1619,33 +2145,65 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: Colors.white10),
           ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final boardWidth = constraints.maxWidth;
-                final boardHeight = constraints.maxHeight;
-                final cellW = boardWidth / _cols;
-                final cellH = boardHeight / _rows;
-                return GestureDetector(
-                  behavior: HitTestBehavior.translucent,
-                  onPanStart: (d) => _onPanStart(d, cellW, cellH),
-                  onPanUpdate: _onPanUpdate,
-                  onPanEnd: _onPanEnd,
-                  child: Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      ..._buildGridBackground(cellW, cellH),
-                      ..._buildObstacleTiles(cellW, cellH),
-                      ..._buildGemTiles(cellW, cellH),
-                      if (_comboText != null)
-                        _buildComboOverlay(boardWidth, boardHeight),
-                      ..._buildFloatingRewards(boardWidth, boardHeight),
-                    ],
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final boardWidth = constraints.maxWidth;
+                    final boardHeight = constraints.maxHeight;
+                    final cellW = boardWidth / _cols;
+                    final cellH = boardHeight / _rows;
+                    return GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTapUp: (d) {
+                        final col = (d.localPosition.dx / cellW).floor().clamp(0, _cols - 1);
+                        final row = (d.localPosition.dy / cellH).floor().clamp(0, _rows - 1);
+                        _onTileTap(row, col);
+                      },
+                      onPanStart: (d) => _onPanStart(d, cellW, cellH),
+                      onPanUpdate: _onPanUpdate,
+                      onPanEnd: _onPanEnd,
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          ..._buildGridBackground(cellW, cellH),
+                          ..._buildGemTiles(cellW, cellH),
+                          ..._buildObstacleTiles(cellW, cellH),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+              // Overlays outside ClipRRect so they can extend beyond board edges.
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final boardWidth = constraints.maxWidth;
+                      final boardHeight = constraints.maxHeight;
+                      final cellW = boardWidth / _cols;
+                      final cellH = boardHeight / _rows;
+                      return Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          if (_comboText != null)
+                            _buildComboOverlay(boardWidth, boardHeight),
+                          ..._buildFloatingRewards(boardWidth, boardHeight),
+                          ..._buildShuffleFlights(cellW, cellH),
+                          Positioned.fill(
+                            child: ConfettiOverlay(key: _confettiKey),
+                          ),
+                        ],
+                      );
+                    },
                   ),
-                );
-              },
-            ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -1658,31 +2216,23 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       for (var c = 0; c < _cols; c++) {
         final pos = Position(r, c);
         final isSelected = _selected == pos;
-        final isHint = _hintPositions.contains(pos);
         widgets.add(
           Positioned(
             left: c * cellW,
             top: r * cellH,
             width: cellW,
             height: cellH,
-            child: GestureDetector(
-              onTap: () => _onTileTap(r, c),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                margin: const EdgeInsets.all(1.5),
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? Colors.white24
-                      : isHint
-                          ? Colors.amber.withValues(alpha: 0.3)
-                          : Colors.white.withValues(alpha: 0.05),
-                  borderRadius: BorderRadius.circular(8),
-                  border: isSelected
-                      ? Border.all(color: Colors.white, width: 2)
-                      : isHint
-                          ? Border.all(color: Colors.amber, width: 2)
-                          : null,
-                ),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              margin: const EdgeInsets.all(1.5),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? Colors.white24
+                    : Colors.white.withValues(alpha: 0.05),
+                borderRadius: BorderRadius.circular(8),
+                border: isSelected
+                    ? Border.all(color: Colors.white, width: 2)
+                    : null,
               ),
             ),
           ),
@@ -1692,9 +2242,20 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     return widgets;
   }
 
+  /// Checks if a position has an obstacle that hides the gem underneath.
+  bool _obstacleHidesGem(Position pos) {
+    final obs = _obstacleManager.obstacles[pos];
+    if (obs == null || obs.isDestroyed) return false;
+    return obs.type == ObstacleType.ice || obs.type == ObstacleType.chain;
+  }
+
   /// Renders obstacle overlays on the board.
+  /// Ice and chain obstacles are rendered OVER gems (gems are hidden).
+  /// Stone and slime are rendered as large overlays.
   List<Widget> _buildObstacleTiles(double cellW, double cellH) {
     final widgets = <Widget>[];
+
+    // Active obstacles.
     for (final entry in _obstacleManager.obstacles.entries) {
       final pos = entry.key;
       final obs = entry.value;
@@ -1711,21 +2272,67 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
           height: cellH,
           child: IgnorePointer(
             child: Center(
-              child: Text(
+              child: EmojiText(
                 _obstacleEmoji(obs.type),
-                style: TextStyle(
-                  fontSize: cellW * 0.35,
-                ),
+                fontSize: cellW * 0.55,
               ),
             ),
           ),
         ),
       );
     }
+
+    // Destroying obstacles — use match animation values (scale up + fade out).
+    if (_destroyingObstacles.isNotEmpty) {
+      final currentAnims = _animController.currentAnimations;
+      final animByPos = <Position, GemAnimation>{};
+      for (final anim in currentAnims) {
+        animByPos[anim.from] = anim;
+      }
+
+      for (final entry in _destroyingObstacles.entries) {
+        final pos = entry.key;
+        final dobs = entry.value;
+        if (pos.row < 0 || pos.row >= _rows || pos.col < 0 || pos.col >= _cols) {
+          continue;
+        }
+
+        final anim = animByPos[pos];
+        final scale = anim?.scale ?? 1.0;
+        final opacity = anim?.opacity ?? 1.0;
+
+        widgets.add(
+          Positioned(
+            left: pos.col * cellW,
+            top: pos.row * cellH,
+            width: cellW,
+            height: cellH,
+            child: IgnorePointer(
+              child: Opacity(
+                opacity: opacity.clamp(0.0, 1.0),
+                child: Transform.scale(
+                  scale: scale,
+                  child: Center(
+                    child: EmojiText(
+                      _obstacleEmoji(dobs.type),
+                      fontSize: cellW * 0.55,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      }
+    }
+
     return widgets;
   }
 
   List<Widget> _buildGemTiles(double cellW, double cellH) {
+    // During shuffle flight, gems are rendered in the overlay instead.
+    if (_shuffleFlights != null) return [];
+
     final widgets = <Widget>[];
     final currentAnims = _animController.currentAnimations;
     final phase = _animController.currentPhase;
@@ -1743,8 +2350,9 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
         final gem = _board.gemAt(pos);
         if (gem == null) continue;
 
-        // Skip cells fully blocked by stone.
+        // Skip cells fully blocked by stone or hidden by ice/chain.
         if (_obstacleManager.blocksCell(pos)) continue;
+        if (_obstacleHidesGem(pos)) continue;
 
         if (_matchedPositions.contains(pos) &&
             phase == BoardAnimationType.match) {
@@ -1803,6 +2411,7 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
           cellH,
           scale: scale,
           opacity: opacity,
+          isHint: _hintPositions.contains(pos),
         ));
       }
     }
@@ -1822,14 +2431,16 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       top: pos.row * cellH,
       width: cellW,
       height: cellH,
-      child: Opacity(
-        opacity: opacity.clamp(0.0, 1.0),
-        child: Transform.scale(
-          scale: scale,
-          child: Center(
-            child: Text(
-              gem.type.emoji,
-              style: TextStyle(fontSize: cellW * 0.55),
+      child: IgnorePointer(
+        child: Opacity(
+          opacity: opacity.clamp(0.0, 1.0),
+          child: Transform.scale(
+            scale: scale,
+            child: Center(
+              child: EmojiText(
+                gem.type.emoji,
+                fontSize: cellW * 0.55,
+              ),
             ),
           ),
         ),
@@ -1845,7 +2456,21 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     double cellH, {
     double scale = 1.0,
     double opacity = 1.0,
+    bool isHint = false,
   }) {
+    // Hint wobble: oscillate rotation ±0.15 radians (~8.5°).
+    final wobble = isHint
+        ? 0.15 * sin(_hintGlimmerController.value * 2 * pi)
+        : 0.0;
+    // Hint bounce: vertical offset oscillation of ±4px.
+    final hintBounce = isHint
+        ? -4.0 * sin(_hintGlimmerController.value * 2 * pi).abs()
+        : 0.0;
+    // Hint pulse: scale oscillation 1.0 → 1.15.
+    final hintScale = isHint
+        ? 1.0 + 0.15 * (0.5 + 0.5 * sin(_hintGlimmerController.value * 2 * pi))
+        : 1.0;
+
     return Positioned(
       left: left,
       top: top,
@@ -1854,28 +2479,41 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       child: IgnorePointer(
         child: Opacity(
           opacity: opacity.clamp(0.0, 1.0),
-          child: Transform.scale(
-            scale: scale,
-            child: Center(
+          child: Transform.translate(
+            offset: Offset(0, hintBounce),
+            child: Transform.scale(
+              scale: scale * hintScale,
+              child: Transform.rotate(
+                angle: wobble,
+                child: Center(
               child: Stack(
                 alignment: Alignment.center,
                 children: [
-                  Text(
+                  EmojiText(
                     gem.type.emoji,
-                    style: TextStyle(fontSize: cellW * 0.55),
+                    fontSize: cellW * 0.55,
                   ),
                   if (gem.special != SpecialType.none)
                     Positioned(
-                      bottom: 2,
-                      right: 2,
-                      child: Text(
-                        _specialIndicator(gem.special),
-                        style: const TextStyle(fontSize: 10),
+                      bottom: 0,
+                      right: 0,
+                      child: Container(
+                        padding: const EdgeInsets.all(1),
+                        decoration: BoxDecoration(
+                          color: Colors.black54,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: EmojiText(
+                          _specialIndicator(gem.special),
+                          fontSize: cellW * 0.28,
+                        ),
                       ),
                     ),
                 ],
               ),
             ),
+          ),
+          ),
           ),
         ),
       ),
@@ -1912,6 +2550,20 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                 label: 'Exit',
                 onTap: _processing ? null : _confirmExit,
               ),
+              if (widget.saveState != null && (GameStateManagerProvider.maybeRead(context)?.settings.debugMode ?? false))
+                _buildButton(
+                  icon: Icons.add_circle_outline,
+                  label: '+10 Moves',
+                  onTap: () {
+                    if (widget.saveState != null) {
+                      setState(() {
+                        widget.saveState!.bonusMoves =
+                            (widget.saveState!.bonusMoves + 10)
+                                .clamp(0, widget.saveState!.maxBonusMoves + 10);
+                      });
+                    }
+                  },
+                ),
             ],
           ),
         ],
@@ -2017,9 +2669,11 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
           children: [
             Text(
               emoji,
-              style: TextStyle(
+              style: EmojiText.emojiStyle(
                 fontSize: 18,
-                color: isDisabled ? Colors.white38 : null,
+                base: TextStyle(
+                  color: isDisabled ? Colors.white38 : null,
+                ),
               ),
             ),
             const SizedBox(width: 4),

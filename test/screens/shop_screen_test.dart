@@ -70,16 +70,16 @@ void main() {
       expect(find.text('Active \u2713'), findsOneWidget);
     });
 
-    testWidgets('animal theme shows price 500', (tester) async {
+    testWidgets('animal theme shows price 200', (tester) async {
       await tester.pumpWidget(createApp());
-      expect(find.text('500'), findsOneWidget);
+      expect(find.text('200'), findsWidgets);
     });
 
-    testWidgets('space theme shows price 1000', (tester) async {
+    testWidgets('space theme shows price 200', (tester) async {
       await tester.pumpWidget(createApp());
       final spaceCard = find.byKey(const Key('shop_item_theme_space'));
       expect(
-        find.descendant(of: spaceCard, matching: find.text('1000')),
+        find.descendant(of: spaceCard, matching: find.text('200')),
         findsOneWidget,
       );
     });
@@ -88,8 +88,12 @@ void main() {
       final save = SaveState(coins: 1000);
       await tester.pumpWidget(createApp(saveState: save));
 
-      // Tap animal theme buy button (500 coins)
-      await tester.tap(find.text('500'));
+      // Tap animal theme buy button (200 coins)
+      final animalCard = find.byKey(const Key('shop_item_theme_animals'));
+      await tester.tap(find.descendant(
+        of: animalCard,
+        matching: find.text('200'),
+      ));
       await tester.pumpAndSettle();
 
       expect(find.text('Buy Animal Theme?'), findsOneWidget);
@@ -103,7 +107,11 @@ void main() {
       await tester.pumpWidget(createApp(saveState: save));
 
       // Tap animal theme buy button
-      await tester.tap(find.text('500'));
+      final animalCard = find.byKey(const Key('shop_item_theme_animals'));
+      await tester.tap(find.descendant(
+        of: animalCard,
+        matching: find.text('200'),
+      ));
       await tester.pumpAndSettle();
 
       // Confirm purchase
@@ -113,7 +121,7 @@ void main() {
       await tester.pump(const Duration(seconds: 1));
 
       // Coins should be deducted
-      expect(find.text('100'), findsOneWidget); // 600 - 500
+      expect(find.text('400'), findsOneWidget); // 600 - 200
       // Purchased theme is owned but not active, so it shows "Use"
       expect(find.text('Use'), findsOneWidget);
     });
@@ -122,18 +130,21 @@ void main() {
       final save = SaveState(coins: 100);
       await tester.pumpWidget(createApp(saveState: save));
 
-      // Tap animal theme buy button (costs 500, only have 100)
-      await tester.tap(find.text('500'));
+      // Tap animal theme buy button (costs 200, only have 100)
+      final animalCard = find.byKey(const Key('shop_item_theme_animals'));
+      await tester.tap(find.descendant(
+        of: animalCard,
+        matching: find.text('200'),
+      ));
       await tester.pumpAndSettle();
 
       // Confirm purchase
       await tester.tap(find.byKey(const Key('confirm_purchase')));
       await tester.pumpAndSettle();
 
-      // Should show error snackbar
-      expect(find.text('Not enough coins!'), findsOneWidget);
-      // Coins unchanged
+      // Coins unchanged (purchase failed)
       expect(save.coins, 100);
+      expect(save.isExtraUnlocked('theme_animals'), isFalse);
     });
 
     testWidgets('fruit theme is always owned by default', (tester) async {

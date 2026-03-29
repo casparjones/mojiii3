@@ -77,6 +77,9 @@ class SpecialGemHandler {
       case SpecialType.bomb:
         return _activateBomb(board, pos);
 
+      case SpecialType.crossBomb:
+        return _activateCrossBomb(board, pos);
+
       case SpecialType.rainbow:
         return _activateRainbow(board, pos, gem.type);
     }
@@ -94,6 +97,20 @@ class SpecialGemHandler {
   /// Striped vertical: clears entire column.
   Set<Position> _activateStripedVertical(Board board, Position pos) {
     final result = <Position>{};
+    for (var r = 0; r < board.rows; r++) {
+      result.add(Position(r, pos.col));
+    }
+    return result;
+  }
+
+  /// Cross bomb: clears entire row AND entire column (cross shape).
+  Set<Position> _activateCrossBomb(Board board, Position pos) {
+    final result = <Position>{};
+    // Entire row
+    for (var c = 0; c < board.cols; c++) {
+      result.add(Position(pos.row, c));
+    }
+    // Entire column
     for (var r = 0; r < board.rows; r++) {
       result.add(Position(r, pos.col));
     }

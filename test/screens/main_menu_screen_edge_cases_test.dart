@@ -46,7 +46,7 @@ void main() {
       await tester.pumpWidget(createApp());
       await tester.pump();
 
-      expect(find.byType(SafeArea), findsOneWidget);
+      expect(find.byType(SafeArea), findsWidgets);
     });
 
     testWidgets('navigating to LevelSelect and back returns to menu',

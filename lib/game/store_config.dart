@@ -53,7 +53,7 @@ class StoreConfig {
 
   /// Builds a share text including the correct store link.
   static Future<String> buildShareText({
-    String message = 'Check out this fun Match-3 game!',
+    String message = 'Check out Mojiii 3 - a fun Match-3 game!',
   }) async {
     final url = await getStoreUrl();
     return '$message\n$url';

@@ -37,7 +37,7 @@ void main() {
       // Find the price text within the animal card area
       await tester.tap(find.descendant(
         of: animalCard,
-        matching: find.text('500'),
+        matching: find.text('200'),
       ));
       await tester.pumpAndSettle();
 
@@ -50,14 +50,14 @@ void main() {
     });
 
     testWidgets('buying with exact coins succeeds', (tester) async {
-      final save = SaveState(coins: 500);
+      final save = SaveState(coins: 200);
       await tester.pumpWidget(createApp(saveState: save));
 
-      // Buy animal theme (exactly 500)
+      // Buy animal theme (exactly 200)
       final animalCard = find.byKey(const Key('shop_item_theme_animals'));
       await tester.tap(find.descendant(
         of: animalCard,
-        matching: find.text('500'),
+        matching: find.text('200'),
       ));
       await tester.pumpAndSettle();
 
@@ -67,34 +67,42 @@ void main() {
 
       expect(save.coins, 0);
       expect(save.isExtraUnlocked('theme_animals'), isTrue);
-      expect(find.text('Animal Theme purchased!'), findsOneWidget);
     });
 
-    testWidgets('successful purchase shows green snackbar', (tester) async {
+    testWidgets('successful purchase updates state', (tester) async {
       final save = SaveState(coins: 600);
       await tester.pumpWidget(createApp(saveState: save));
 
-      await tester.tap(find.text('500'));
+      final animalCard = find.byKey(const Key('shop_item_theme_animals'));
+      await tester.tap(find.descendant(
+        of: animalCard,
+        matching: find.text('200'),
+      ));
       await tester.pumpAndSettle();
 
       await tester.tap(find.byKey(const Key('confirm_purchase')));
       await tester.pumpAndSettle();
-      await tester.pump(const Duration(seconds: 1));
 
-      expect(find.text('Animal Theme purchased!'), findsOneWidget);
+      expect(save.coins, 400);
+      expect(save.isExtraUnlocked('theme_animals'), isTrue);
     });
 
-    testWidgets('failed purchase shows red snackbar', (tester) async {
+    testWidgets('failed purchase keeps coins unchanged', (tester) async {
       final save = SaveState(coins: 10);
       await tester.pumpWidget(createApp(saveState: save));
 
-      await tester.tap(find.text('500'));
+      final animalCard = find.byKey(const Key('shop_item_theme_animals'));
+      await tester.tap(find.descendant(
+        of: animalCard,
+        matching: find.text('200'),
+      ));
       await tester.pumpAndSettle();
 
       await tester.tap(find.byKey(const Key('confirm_purchase')));
       await tester.pumpAndSettle();
 
-      expect(find.text('Not enough coins!'), findsOneWidget);
+      expect(save.coins, 10);
+      expect(save.isExtraUnlocked('theme_animals'), isFalse);
     });
 
     testWidgets('multiple items can be purchased sequentially',
@@ -102,31 +110,31 @@ void main() {
       final save = SaveState(coins: 2000);
       await tester.pumpWidget(createApp(saveState: save));
 
-      // Buy animal theme (500) using descendant finder
+      // Buy animal theme (200) using descendant finder
       final animalCard = find.byKey(const Key('shop_item_theme_animals'));
       await tester.tap(find.descendant(
         of: animalCard,
-        matching: find.text('500'),
+        matching: find.text('200'),
       ));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('confirm_purchase')));
       await tester.pumpAndSettle();
       await tester.pump(const Duration(seconds: 1));
 
-      expect(save.coins, 1500);
+      expect(save.coins, 1800);
 
-      // Buy space theme (1000) using descendant finder to avoid ambiguity
+      // Buy space theme (200) using descendant finder to avoid ambiguity
       final spaceCard = find.byKey(const Key('shop_item_theme_space'));
       await tester.tap(find.descendant(
         of: spaceCard,
-        matching: find.text('1000'),
+        matching: find.text('200'),
       ));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('confirm_purchase')));
       await tester.pumpAndSettle();
       await tester.pump(const Duration(seconds: 1));
 
-      expect(save.coins, 500);
+      expect(save.coins, 1600);
       expect(save.isExtraUnlocked('theme_animals'), isTrue);
       expect(save.isExtraUnlocked('theme_space'), isTrue);
     });
@@ -151,11 +159,11 @@ void main() {
       );
       // Neither should show a price button
       expect(
-        find.descendant(of: fruitCard, matching: find.text('500')),
+        find.descendant(of: fruitCard, matching: find.text('200')),
         findsNothing,
       );
       expect(
-        find.descendant(of: animalCard, matching: find.text('500')),
+        find.descendant(of: animalCard, matching: find.text('200')),
         findsNothing,
       );
     });

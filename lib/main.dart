@@ -36,6 +36,13 @@ class GameStateManagerProvider extends InheritedWidget {
     return provider!.gameStateManager;
   }
 
+  /// Retrieve the [GameStateManager] without asserting (returns null if missing).
+  static GameStateManager? maybeRead(BuildContext context) {
+    return context
+        .getInheritedWidgetOfExactType<GameStateManagerProvider>()
+        ?.gameStateManager;
+  }
+
   @override
   bool updateShouldNotify(GameStateManagerProvider oldWidget) {
     return gameStateManager != oldWidget.gameStateManager;
@@ -84,20 +91,49 @@ class Match3App extends StatefulWidget {
   State<Match3App> createState() => _Match3AppState();
 }
 
-class _Match3AppState extends State<Match3App> {
+class _Match3AppState extends State<Match3App> with WidgetsBindingObserver {
   late final GameStateManager _gameStateManager;
   late final MusicManager _musicManager;
   bool? _previousMusicEnabled;
+  /// Whether the music was playing before the app went to the background.
+  bool _wasMusicPlayingBeforePause = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _gameStateManager = widget.gameStateManager ?? GameStateManager();
     _musicManager = MusicManager(
       settingsProvider: () => _gameStateManager.settings,
     );
     _gameStateManager.addListener(_onGameStateChanged);
     _gameStateManager.load();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    switch (state) {
+      case AppLifecycleState.paused:
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.hidden:
+        // Only capture the playing state on the first transition away from
+        // resumed, so that subsequent lifecycle events (inactive -> paused)
+        // don't overwrite it with false.
+        if (_musicManager.isPlaying) {
+          _wasMusicPlayingBeforePause = true;
+        }
+        _musicManager.pause();
+        break;
+      case AppLifecycleState.resumed:
+        if (_wasMusicPlayingBeforePause) {
+          _wasMusicPlayingBeforePause = false;
+          _musicManager.resume();
+        }
+        break;
+      case AppLifecycleState.detached:
+        break;
+    }
   }
 
   void _onGameStateChanged() {
@@ -110,6 +146,7 @@ class _Match3AppState extends State<Match3App> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _gameStateManager.removeListener(_onGameStateChanged);
     _musicManager.dispose();
     // Only dispose if we created it ourselves.
@@ -126,7 +163,7 @@ class _Match3AppState extends State<Match3App> {
       child: MusicManagerProvider(
         musicManager: _musicManager,
         child: MaterialApp(
-          title: 'Match3',
+          title: 'Mojiii 3',
           debugShowCheckedModeBanner: false,
           theme: ThemeData.dark(useMaterial3: true).copyWith(
             colorScheme: ColorScheme.fromSeed(

@@ -28,7 +28,7 @@ void main() {
 
     testWidgets('extra moves adds 20 to movesRemaining in level mode',
         (tester) async {
-      final saveState = SaveState();
+      final saveState = SaveState(bonusMoves: 0);
       saveState.addPowerUp('powerup_extra_moves', count: 1);
       final config = const LevelGenerator().generate(1);
       final key = GlobalKey<GameScreenState>();

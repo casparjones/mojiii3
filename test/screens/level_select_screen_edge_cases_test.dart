@@ -18,8 +18,8 @@ void main() {
     testWidgets('renders with default SaveState when none provided',
         (tester) async {
       await tester.pumpWidget(createApp());
-      // Should not crash. With 0 bonus moves, level 1 shows "Keine Moves".
-      expect(find.text('Keine Moves'), findsOneWidget);
+      // Should not crash. With default 60 bonus moves, no "Keine Moves" shown.
+      expect(find.text('Keine Moves'), findsNothing);
     });
 
     testWidgets('renders with totalLevels = 1', (tester) async {
@@ -137,20 +137,38 @@ void main() {
       expect(appBar.centerTitle, true);
     });
 
-    testWidgets('New Levels tab shows unlocked uncompleted levels',
+    testWidgets('New Levels tab hides completed when current is odd',
         (tester) async {
       final save = SaveState(currentLevel: 4, bonusMoves: 5);
       save.levelRecord(1).recordCompletion(score: 100, stars: 1);
       save.levelRecord(2).recordCompletion(score: 200, stars: 2);
-      // Level 3, 4 unlocked but not completed
+      // Level 3 is current (odd) → completed levels hidden
 
       await tester.pumpWidget(createApp(saveState: save, totalLevels: 6));
 
-      // New Levels tab: levels 3, 4 (unlocked, 0 stars) + level 5 (locked preview)
+      // Current level 3 (odd): starts fresh, no completed levels shown
       expect(find.byKey(const Key('level_tile_3')), findsOneWidget);
       expect(find.byKey(const Key('level_tile_4')), findsOneWidget);
       expect(find.byKey(const Key('level_tile_5')), findsOneWidget);
-      // Completed levels should NOT be on this tab
+      expect(find.byKey(const Key('level_tile_1')), findsNothing);
+      expect(find.byKey(const Key('level_tile_2')), findsNothing);
+    });
+
+    testWidgets('New Levels tab shows prev level when current is even',
+        (tester) async {
+      final save = SaveState(currentLevel: 5, bonusMoves: 5);
+      save.levelRecord(1).recordCompletion(score: 100, stars: 1);
+      save.levelRecord(2).recordCompletion(score: 200, stars: 2);
+      save.levelRecord(3).recordCompletion(score: 300, stars: 3);
+      // Level 4 is current (even) → level 3 shown on the left
+
+      await tester.pumpWidget(createApp(saveState: save, totalLevels: 6));
+
+      expect(find.byKey(const Key('level_tile_4')), findsOneWidget);
+      expect(find.byKey(const Key('level_tile_5')), findsOneWidget);
+      // Level 3 shown as left neighbor
+      expect(find.byKey(const Key('level_tile_3')), findsOneWidget);
+      // Older completed levels hidden
       expect(find.byKey(const Key('level_tile_1')), findsNothing);
       expect(find.byKey(const Key('level_tile_2')), findsNothing);
     });

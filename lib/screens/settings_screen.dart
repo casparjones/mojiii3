@@ -78,6 +78,50 @@ class SettingsScreen extends StatelessWidget {
               _buildStatRow('Total Stars', '${gsm.totalStars}'),
               _buildStatRow('Current Coins', '${gsm.coins}'),
               const SizedBox(height: 32),
+              _buildSectionHeader('Credits'),
+              const SizedBox(height: 8),
+              _buildCreditRow(
+                'Emoji Graphics',
+                'Google Noto Color Emoji',
+                'Apache License 2.0',
+              ),
+              const SizedBox(height: 24),
+              _buildSectionHeader('Developer'),
+              const SizedBox(height: 8),
+              _buildToggle(
+                key: const Key('debug_toggle'),
+                icon: Icons.bug_report,
+                label: 'Debug Mode',
+                value: gsm.settings.debugMode,
+                onChanged: (_) => gsm.toggleDebugMode(),
+              ),
+              if (gsm.settings.debugMode) ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildActionButton(
+                        label: '+200 Coins',
+                        color: Colors.amber,
+                        onTap: () => gsm.saveState.coins += 200,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _buildActionButton(
+                        label: '+20 Moves',
+                        color: Colors.lightBlue,
+                        onTap: () {
+                          gsm.saveState.bonusMoves =
+                              (gsm.saveState.bonusMoves + 20)
+                                  .clamp(0, gsm.saveState.maxBonusMoves + 20);
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+              const SizedBox(height: 24),
               _buildSectionHeader('Danger Zone'),
               const SizedBox(height: 8),
               _buildResetButton(context, gsm),
@@ -170,6 +214,39 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
+  Widget _buildCreditRow(String category, String name, String license) {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFF16213e),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            category,
+            style: const TextStyle(color: Colors.white70, fontSize: 12),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            name,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          Text(
+            license,
+            style: const TextStyle(color: Colors.white38, fontSize: 12),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _resetProgress(BuildContext context, GameStateManager gsm) {
     showDialog(
       context: context,
@@ -204,6 +281,34 @@ class SettingsScreen extends StatelessWidget {
             child: const Text('Reset'),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildActionButton({
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withValues(alpha: 0.5)),
+        ),
+        child: Center(
+          child: Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
       ),
     );
   }

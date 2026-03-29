@@ -165,6 +165,9 @@ class SaveState {
   /// The ID of the currently selected emoji theme.
   String selectedThemeId;
 
+  /// Last date the daily chest was claimed (ISO 8601 date string).
+  String dailyChestClaimedDate;
+
   /// Bonus moves accumulated over time (default max 60).
   int bonusMoves;
 
@@ -182,7 +185,8 @@ class SaveState {
     Map<String, int>? powerUpInventory,
     this.tutorialShown = false,
     this.selectedThemeId = 'theme_fruit',
-    this.bonusMoves = 0,
+    this.dailyChestClaimedDate = '',
+    this.bonusMoves = SaveState.defaultMaxBonusMoves,
     this.maxBonusMoves = SaveState.defaultMaxBonusMoves,
     this.lastMoveRegenTime,
   })  : stats = stats ?? PlayerStats(),
@@ -366,6 +370,7 @@ class SaveState {
         'powerUpInventory': powerUpInventory,
         'tutorialShown': tutorialShown,
         'selectedThemeId': selectedThemeId,
+        'dailyChestClaimedDate': dailyChestClaimedDate,
         'bonusMoves': bonusMoves,
         'maxBonusMoves': maxBonusMoves,
         'lastMoveRegenTime': lastMoveRegenTime?.toIso8601String(),
@@ -407,6 +412,7 @@ class SaveState {
       powerUpInventory: powerUpInventory,
       tutorialShown: json['tutorialShown'] as bool? ?? false,
       selectedThemeId: json['selectedThemeId'] as String? ?? 'theme_fruit',
+      dailyChestClaimedDate: json['dailyChestClaimedDate'] as String? ?? '',
       bonusMoves: json['bonusMoves'] as int? ?? 0,
       maxBonusMoves: json['maxBonusMoves'] as int? ?? SaveState.defaultMaxBonusMoves,
       lastMoveRegenTime: json['lastMoveRegenTime'] != null
@@ -418,6 +424,16 @@ class SaveState {
   /// Deserialize from JSON string.
   factory SaveState.fromJsonString(String jsonString) {
     return SaveState.fromJson(jsonDecode(jsonString) as Map<String, dynamic>);
+  }
+
+  /// Whether the daily chest can be claimed today.
+  bool canClaimDailyChest(String todayDate) {
+    return dailyChestClaimedDate != todayDate;
+  }
+
+  /// Mark the daily chest as claimed for today.
+  void markDailyChestClaimed(String todayDate) {
+    dailyChestClaimedDate = todayDate;
   }
 
   /// Simple consecutive day check (compares ISO date strings).

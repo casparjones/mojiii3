@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../game/game_state_manager.dart';
 import '../main.dart';
+import '../widgets/emoji_text.dart';
 
 /// A shop item that can be purchased.
 class ShopItem {
@@ -38,8 +39,8 @@ const List<ShopItem> shopThemes = [
     id: 'theme_animals',
     name: 'Animal Theme',
     description: 'Cute animal emojis',
-    emojis: '🐱🐶🐰🦊🐼🐨',
-    price: 500,
+    emojis: '🦊🐶🐰🐱🐼🐨',
+    price: 200,
     category: ShopCategory.theme,
   ),
   ShopItem(
@@ -47,7 +48,111 @@ const List<ShopItem> shopThemes = [
     name: 'Space Theme',
     description: 'Cosmic space emojis',
     emojis: '🚀🌙⭐💫🪐☄️',
-    price: 1000,
+    price: 200,
+    category: ShopCategory.theme,
+  ),
+  ShopItem(
+    id: 'theme_tools',
+    name: 'Handwerker',
+    description: 'Hammer, Saege & Werkzeug',
+    emojis: '🔨🪚🪛🔧🔩⚙️',
+    price: 200,
+    category: ShopCategory.theme,
+  ),
+  ShopItem(
+    id: 'theme_hands',
+    name: 'Haende',
+    description: 'Handschlag, Winken & mehr',
+    emojis: '🤝👋👍👏✊🤞',
+    price: 200,
+    category: ShopCategory.theme,
+  ),
+  ShopItem(
+    id: 'theme_people',
+    name: 'Menschen',
+    description: 'Personen in verschiedenen Varianten',
+    emojis: '👨👩🧒👴👶🧑',
+    price: 200,
+    category: ShopCategory.theme,
+  ),
+  ShopItem(
+    id: 'theme_cats',
+    name: 'Katzen',
+    description: 'Katzenemojis & Katzengesichter',
+    emojis: '🐱😺😸🙀😻😽',
+    price: 200,
+    category: ShopCategory.theme,
+  ),
+  ShopItem(
+    id: 'theme_hearts',
+    name: 'Herzen',
+    description: 'Alle Herzvarianten',
+    emojis: '❤️💙💚💛💜🧡',
+    price: 200,
+    category: ShopCategory.theme,
+  ),
+  ShopItem(
+    id: 'theme_professions',
+    name: 'Berufe',
+    description: 'Arzt, Koch, Feuerwehr & Co.',
+    emojis: '👨‍⚕️👨‍🍳👨‍🚒👮👷👨‍🏫',
+    price: 200,
+    category: ShopCategory.theme,
+  ),
+  ShopItem(
+    id: 'theme_flowers',
+    name: 'Blumen',
+    description: 'Rose, Sonnenblume, Tulpe & mehr',
+    emojis: '🌹🌸🌻🌷💐🌺',
+    price: 200,
+    category: ShopCategory.theme,
+  ),
+  ShopItem(
+    id: 'theme_weather',
+    name: 'Wetter',
+    description: 'Sonne, Regen, Schnee & Gewitter',
+    emojis: '☀️🌧️❄️⛈️🌈🌤️',
+    price: 200,
+    category: ShopCategory.theme,
+  ),
+  ShopItem(
+    id: 'theme_moon',
+    name: 'Mond',
+    description: 'Mondphasen, Sterne & Planeten',
+    emojis: '🌙🌕🌑⭐🪐🌓',
+    price: 200,
+    category: ShopCategory.theme,
+  ),
+  ShopItem(
+    id: 'theme_food',
+    name: 'Essen',
+    description: 'Pizza, Burger, Sushi & mehr',
+    emojis: '🍕🍔🍣🌮🍩🍟',
+    price: 200,
+    category: ShopCategory.theme,
+  ),
+  ShopItem(
+    id: 'theme_party',
+    name: 'Party',
+    description: 'Konfetti, Ballons & Kuchen',
+    emojis: '🎉🎈🎂🥂🎊🎁',
+    price: 200,
+    category: ShopCategory.theme,
+  ),
+  ShopItem(
+    id: 'theme_landmarks',
+    name: 'Sehenswuerdigkeiten',
+    description: 'Eiffelturm, Freiheitsstatue & Co.',
+    emojis: '🗼🗽🏰🕌⛩️🗿',
+    price: 200,
+    category: ShopCategory.theme,
+  ),
+  ShopItem(
+    id: 'theme_flags',
+    name: 'Flaggen',
+    description: 'Laender-Flaggen der Welt',
+    emojis: '🇩🇪🇫🇷🇮🇹🇪🇸🇬🇧🇯🇵',
+    price: 200,
     category: ShopCategory.theme,
   ),
 ];
@@ -245,7 +350,7 @@ class ShopScreen extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Text('🪙', style: TextStyle(fontSize: 24)),
+          const EmojiText('🪙', fontSize: 24),
           const SizedBox(width: 8),
           Text(
             '${gsm.coins}',
@@ -322,24 +427,66 @@ class ShopScreen extends StatelessWidget {
         gsm.saveState.addPowerUp(item.id);
       } else {
         gsm.saveState.unlockExtra(item.id);
+        // Auto-activate purchased theme.
+        if (item.category == ShopCategory.theme) {
+          gsm.setTheme(item.id);
+        }
       }
       gsm.persistState();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('${item.name} purchased!'),
-          backgroundColor: Colors.green,
-          duration: const Duration(seconds: 2),
-        ),
-      );
+      _showFloatingToast(context, '${item.name} gekauft! ✅', Colors.green, item.id);
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Not enough coins!'),
-          backgroundColor: Colors.red,
-          duration: Duration(seconds: 2),
-        ),
-      );
+      _showFloatingToast(context, 'Nicht genug Coins!', Colors.red, item.id);
     }
+  }
+
+  /// Shows a small floating toast near the shop item card.
+  void _showFloatingToast(BuildContext context, String message, Color color, String itemId) {
+    // Try to find the item card's position to anchor the toast.
+    final itemKey = Key('shop_item_$itemId');
+    final overlay = Overlay.of(context);
+
+    // Find the RenderBox of the item card.
+    Offset toastOffset = Offset(
+      MediaQuery.of(context).size.width / 2,
+      MediaQuery.of(context).size.height / 2,
+    );
+    final cardElement = _findElementByKey(context, itemKey);
+    if (cardElement != null) {
+      final renderBox = cardElement.findRenderObject() as RenderBox?;
+      if (renderBox != null && renderBox.hasSize) {
+        final pos = renderBox.localToGlobal(Offset.zero);
+        toastOffset = Offset(
+          pos.dx + renderBox.size.width / 2,
+          pos.dy - 8, // just above the card
+        );
+      }
+    }
+
+    late OverlayEntry entry;
+    entry = OverlayEntry(
+      builder: (context) => _FloatingToast(
+        message: message,
+        color: color,
+        position: toastOffset,
+        onDone: () => entry.remove(),
+      ),
+    );
+    overlay.insert(entry);
+  }
+
+  /// Walks the element tree to find a widget with the given key.
+  Element? _findElementByKey(BuildContext context, Key key) {
+    Element? found;
+    void visitor(Element element) {
+      if (found != null) return;
+      if (element.widget.key == key) {
+        found = element;
+        return;
+      }
+      element.visitChildren(visitor);
+    }
+    (context as Element).visitChildren(visitor);
+    return found;
   }
 
   void _purchaseInstantMoves(BuildContext context, GameStateManager gsm, InstantMovesItem item) {
@@ -417,21 +564,9 @@ class ShopScreen extends StatelessWidget {
       gsm.saveState.bonusMoves =
           (gsm.saveState.bonusMoves + effective).clamp(0, gsm.saveState.maxBonusMoves);
       gsm.persistState();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('+$effective Zuege!'),
-          backgroundColor: Colors.green,
-          duration: const Duration(seconds: 2),
-        ),
-      );
+      _showFloatingToast(context, '+$effective Züge gekauft! ✅', Colors.green, item.id);
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Nicht genug Muenzen!'),
-          backgroundColor: Colors.red,
-          duration: Duration(seconds: 2),
-        ),
-      );
+      _showFloatingToast(context, 'Nicht genug Coins!', Colors.red, item.id);
     }
   }
 
@@ -462,7 +597,7 @@ class ShopScreen extends StatelessWidget {
                 borderRadius: BorderRadius.circular(12),
               ),
               alignment: Alignment.center,
-              child: Text(item.emojis, style: const TextStyle(fontSize: 28)),
+              child: EmojiText(item.emojis, fontSize: 28),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -516,7 +651,7 @@ class ShopScreen extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Text('\uD83E\uDE99', style: TextStyle(fontSize: 14)),
+                      const EmojiText('\uD83E\uDE99', fontSize: 14),
                       const SizedBox(width: 4),
                       Text(
                         '${item.price}',
@@ -561,21 +696,9 @@ class ShopScreen extends StatelessWidget {
               if (gsm.spendCoins(item.price)) {
                 gsm.saveState.maxBonusMoves = item.targetMaxMoves;
                 gsm.persistState();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('${item.name} gekauft!'),
-                    backgroundColor: Colors.green,
-                    duration: const Duration(seconds: 2),
-                  ),
-                );
+                _showFloatingToast(context, '${item.name} gekauft! ✅', Colors.green, item.id);
               } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Nicht genug Muenzen!'),
-                    backgroundColor: Colors.red,
-                    duration: Duration(seconds: 2),
-                  ),
-                );
+                _showFloatingToast(context, 'Nicht genug Coins!', Colors.red, item.id);
               }
             },
             child: const Text('Kaufen'),
@@ -613,9 +736,9 @@ class ShopScreen extends StatelessWidget {
                 borderRadius: BorderRadius.circular(12),
               ),
               alignment: Alignment.center,
-              child: Text(
+              child: EmojiText(
                 item.emojis,
-                style: const TextStyle(fontSize: 28),
+                fontSize: 28,
               ),
             ),
             const SizedBox(width: 12),
@@ -671,7 +794,7 @@ class ShopScreen extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Text('🪙', style: TextStyle(fontSize: 14)),
+                      const EmojiText('🪙', fontSize: 14),
                       const SizedBox(width: 4),
                       Text(
                         '${item.price}',
@@ -727,9 +850,9 @@ class ShopScreen extends StatelessWidget {
                 borderRadius: BorderRadius.circular(12),
               ),
               alignment: Alignment.center,
-              child: Text(
+              child: EmojiText(
                 item.emojis.characters.first,
-                style: const TextStyle(fontSize: 28),
+                fontSize: 28,
               ),
             ),
             const SizedBox(width: 12),
@@ -766,9 +889,9 @@ class ShopScreen extends StatelessWidget {
                       ),
                     )
                   else
-                    Text(
+                    EmojiText(
                       item.emojis,
-                      style: const TextStyle(fontSize: 14),
+                      fontSize: 14,
                     ),
                 ],
               ),
@@ -795,13 +918,7 @@ class ShopScreen extends StatelessWidget {
               GestureDetector(
                 onTap: () {
                   gsm.setTheme(item.id);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Theme activated! \u{1F3A8}'),
-                      backgroundColor: Colors.deepPurple,
-                      duration: Duration(seconds: 2),
-                    ),
-                  );
+                  _showFloatingToast(context, 'Theme aktiviert! 🎨', Colors.deepPurple, item.id);
                 },
                 child: Container(
                   key: Key('use_theme_${item.id}'),
@@ -872,7 +989,7 @@ class ShopScreen extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Text('🪙', style: TextStyle(fontSize: 14)),
+                      const EmojiText('🪙', fontSize: 14),
                       const SizedBox(width: 4),
                       Text(
                         '${item.price}',
@@ -887,6 +1004,101 @@ class ShopScreen extends StatelessWidget {
                 ),
               ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A small floating toast that appears near an element and fades out.
+class _FloatingToast extends StatefulWidget {
+  final String message;
+  final Color color;
+  final Offset position;
+  final VoidCallback onDone;
+
+  const _FloatingToast({
+    required this.message,
+    required this.color,
+    required this.position,
+    required this.onDone,
+  });
+
+  @override
+  State<_FloatingToast> createState() => _FloatingToastState();
+}
+
+class _FloatingToastState extends State<_FloatingToast>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _opacity;
+  late Animation<double> _offsetY;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1800),
+    );
+    _opacity = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 0.0, end: 1.0), weight: 15),
+      TweenSequenceItem(tween: ConstantTween(1.0), weight: 55),
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 0.0), weight: 30),
+    ]).animate(_controller);
+    _offsetY = Tween<double>(begin: 0, end: -40).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeOut),
+    );
+    _controller.forward().then((_) => widget.onDone());
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return Positioned(
+          left: widget.position.dx - 140,
+          top: widget.position.dy + _offsetY.value,
+          child: IgnorePointer(
+            child: Opacity(
+              opacity: _opacity.value.clamp(0.0, 1.0),
+              child: child,
+            ),
+          ),
+        );
+      },
+      child: Container(
+        width: 280,
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+        decoration: BoxDecoration(
+          color: widget.color.withValues(alpha: 0.9),
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: widget.color.withValues(alpha: 0.4),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Text(
+          widget.message,
+          textAlign: TextAlign.center,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            decoration: TextDecoration.none,
+          ),
         ),
       ),
     );

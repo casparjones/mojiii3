@@ -70,8 +70,207 @@ class EmojiTheme {
     },
   );
 
+  /// Handwerker (Tools) theme.
+  static const tools = EmojiTheme(
+    id: 'theme_tools',
+    name: 'Handwerker',
+    emojis: {
+      GemType.red: '🔨',
+      GemType.blue: '🪚',
+      GemType.green: '🪛',
+      GemType.yellow: '🔧',
+      GemType.purple: '🔩',
+      GemType.orange: '⚙️',
+    },
+  );
+
+  /// Hands theme.
+  static const hands = EmojiTheme(
+    id: 'theme_hands',
+    name: 'Haende',
+    emojis: {
+      GemType.red: '👊',
+      GemType.blue: '✌️',
+      GemType.green: '🤙',
+      GemType.yellow: '👋',
+      GemType.purple: '🖖',
+      GemType.orange: '👍',
+    },
+  );
+
+  /// People theme.
+  static const people = EmojiTheme(
+    id: 'theme_people',
+    name: 'Menschen',
+    emojis: {
+      GemType.red: '👮',
+      GemType.blue: '🧙',
+      GemType.green: '🧛',
+      GemType.yellow: '🤴',
+      GemType.purple: '🧜‍♀️',
+      GemType.orange: '🦸',
+    },
+  );
+
+  /// Cats theme.
+  static const cats = EmojiTheme(
+    id: 'theme_cats',
+    name: 'Katzen',
+    emojis: {
+      GemType.red: '🐱',
+      GemType.blue: '🐯',
+      GemType.green: '🦁',
+      GemType.yellow: '🐆',
+      GemType.purple: '🐈‍⬛',
+      GemType.orange: '🐾',
+    },
+  );
+
+  /// Hearts theme.
+  static const hearts = EmojiTheme(
+    id: 'theme_hearts',
+    name: 'Herzen',
+    emojis: {
+      GemType.red: '❤️',
+      GemType.blue: '💙',
+      GemType.green: '💚',
+      GemType.yellow: '💛',
+      GemType.purple: '💜',
+      GemType.orange: '🧡',
+    },
+  );
+
+  /// Professions theme.
+  static const professions = EmojiTheme(
+    id: 'theme_professions',
+    name: 'Berufe',
+    emojis: {
+      GemType.red: '👨‍⚕️',
+      GemType.blue: '👨‍🍳',
+      GemType.green: '👨‍🚒',
+      GemType.yellow: '👨‍🔬',
+      GemType.purple: '👷',
+      GemType.orange: '👨‍🏫',
+    },
+  );
+
+  /// Flowers theme.
+  static const flowers = EmojiTheme(
+    id: 'theme_flowers',
+    name: 'Blumen',
+    emojis: {
+      GemType.red: '🌹',
+      GemType.blue: '🌻',
+      GemType.green: '🌵',
+      GemType.yellow: '🌷',
+      GemType.purple: '💐',
+      GemType.orange: '🍀',
+    },
+  );
+
+  /// Weather theme.
+  static const weather = EmojiTheme(
+    id: 'theme_weather',
+    name: 'Wetter',
+    emojis: {
+      GemType.red: '☀️',
+      GemType.blue: '🌧️',
+      GemType.green: '🌪️',
+      GemType.yellow: '⛈️',
+      GemType.purple: '🌈',
+      GemType.orange: '🌤️',
+    },
+  );
+
+  /// Moon & Space theme.
+  static const moon = EmojiTheme(
+    id: 'theme_moon',
+    name: 'Mond & Nacht',
+    emojis: {
+      GemType.red: '🌙',
+      GemType.blue: '🌕',
+      GemType.green: '🦉',
+      GemType.yellow: '⭐',
+      GemType.purple: '🦇',
+      GemType.orange: '🔭',
+    },
+  );
+
+  /// Food theme.
+  static const food = EmojiTheme(
+    id: 'theme_food',
+    name: 'Essen',
+    emojis: {
+      GemType.red: '🍕',
+      GemType.blue: '🍔',
+      GemType.green: '🍣',
+      GemType.yellow: '🌮',
+      GemType.purple: '🍩',
+      GemType.orange: '🍟',
+    },
+  );
+
+  /// Party theme.
+  static const party = EmojiTheme(
+    id: 'theme_party',
+    name: 'Party',
+    emojis: {
+      GemType.red: '🎉',
+      GemType.blue: '🎈',
+      GemType.green: '🎂',
+      GemType.yellow: '🥂',
+      GemType.purple: '🎊',
+      GemType.orange: '🎁',
+    },
+  );
+
+  /// Landmarks theme.
+  static const landmarks = EmojiTheme(
+    id: 'theme_landmarks',
+    name: 'Sehenswuerdigkeiten',
+    emojis: {
+      GemType.red: '🗼',
+      GemType.blue: '🗽',
+      GemType.green: '🏰',
+      GemType.yellow: '🕌',
+      GemType.purple: '⛩️',
+      GemType.orange: '🗿',
+    },
+  );
+
+  /// Flags theme.
+  static const flags = EmojiTheme(
+    id: 'theme_flags',
+    name: 'Flaggen',
+    emojis: {
+      GemType.red: '🇩🇪',
+      GemType.blue: '🇫🇷',
+      GemType.green: '🇮🇹',
+      GemType.yellow: '🇪🇸',
+      GemType.purple: '🇬🇧',
+      GemType.orange: '🇯🇵',
+    },
+  );
+
   /// All available themes.
-  static const List<EmojiTheme> allThemes = [fruit, animals, space];
+  static const List<EmojiTheme> allThemes = [
+    fruit,
+    animals,
+    space,
+    tools,
+    hands,
+    people,
+    cats,
+    hearts,
+    professions,
+    flowers,
+    weather,
+    moon,
+    food,
+    party,
+    landmarks,
+    flags,
+  ];
 
   /// Look up a theme by its [id]. Returns [fruit] if not found.
   static EmojiTheme byId(String id) {

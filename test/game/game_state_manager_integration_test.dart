@@ -126,15 +126,19 @@ void main() {
         gameStateManager: gsm,
       ));
 
-      // Buy animal theme (500)
-      await tester.tap(find.text('500'));
+      // Buy animal theme (200)
+      final animalCard = find.byKey(const Key('shop_item_theme_animals'));
+      await tester.tap(find.descendant(
+        of: animalCard,
+        matching: find.text('200'),
+      ));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('confirm_purchase')));
       await tester.pumpAndSettle();
       await tester.pump(const Duration(seconds: 1));
 
-      expect(gsm.coins, 100);
-      expect(find.text('100'), findsOneWidget);
+      expect(gsm.coins, 400);
+      expect(find.text('400'), findsOneWidget);
     });
 
     testWidgets('SettingsScreen reset resets GameStateManager',

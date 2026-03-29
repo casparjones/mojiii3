@@ -68,7 +68,7 @@ void main() {
     });
 
     testWidgets('extra moves power-up still adds 20 moves', (tester) async {
-      final saveState = SaveState();
+      final saveState = SaveState(bonusMoves: 0);
       saveState.addPowerUp('powerup_extra_moves', count: 1);
 
       await tester.pumpWidget(

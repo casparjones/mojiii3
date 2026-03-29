@@ -157,7 +157,7 @@ void main() {
     });
 
     testWidgets(
-        'New Levels tab shows completion message when all levels done',
+        'New Levels tab shows last completed levels when all done',
         (tester) async {
       final save = SaveState(currentLevel: 3);
       save.levelRecord(1).recordCompletion(score: 100, stars: 1);
@@ -165,7 +165,9 @@ void main() {
 
       await tester.pumpWidget(createApp(saveState: save, totalLevels: 2));
 
-      expect(find.textContaining('Alle Level geschafft'), findsOneWidget);
+      // All levels completed — still shows them for replay/farming.
+      expect(find.byKey(const Key('level_tile_1')), findsOneWidget);
+      expect(find.byKey(const Key('level_tile_2')), findsOneWidget);
     });
   });
 }

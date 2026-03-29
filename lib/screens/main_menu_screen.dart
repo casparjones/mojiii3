@@ -1,10 +1,13 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../game/music_manager.dart';
 import '../main.dart';
 import '../models/emoji_theme.dart';
+import '../widgets/daily_chest.dart';
+import '../widgets/emoji_text.dart';
 import 'level_select_screen.dart';
 import 'shop_screen.dart';
 import 'settings_screen.dart';
@@ -167,9 +170,9 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                 top: e.y * size.height,
                 child: Opacity(
                   opacity: e.opacity,
-                  child: Text(
+                  child: EmojiText(
                     e.emoji,
-                    style: TextStyle(fontSize: e.size),
+                    fontSize: e.size,
                   ),
                 ),
               )),
@@ -183,7 +186,7 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                   const Spacer(flex: 2),
                   _buildLogo(),
                   const Spacer(flex: 1),
-                  // Coin & moves display
+                  // Coin & moves display (updated key comment)
                   Builder(builder: (context) {
                     final gsm = GameStateManagerProvider.of(context);
                     final ss = gsm.saveState;
@@ -201,8 +204,8 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Text('🪙',
-                                  style: TextStyle(fontSize: 20)),
+                              const EmojiText('🪙',
+                                  fontSize: 20),
                               const SizedBox(width: 8),
                               Text(
                                 '${gsm.coins}',
@@ -273,7 +276,221 @@ class _MainMenuScreenState extends State<MainMenuScreen>
               ),
             ),
           ),
+
+          // Debug buttons — top right (when debug mode enabled in settings)
+          Builder(builder: (context) {
+            final gsm = GameStateManagerProvider.of(context);
+            if (!gsm.settings.debugMode) return const SizedBox.shrink();
+            return Positioned(
+              right: 12,
+              top: 12,
+              child: SafeArea(
+                child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _buildDebugButton(
+                        label: '+200 Coins',
+                        onTap: () => setState(() => gsm.saveState.coins += 200),
+                      ),
+                      const SizedBox(height: 8),
+                      _buildDebugButton(
+                        label: '+20 Moves',
+                        onTap: () => setState(() {
+                          gsm.saveState.bonusMoves = (gsm.saveState.bonusMoves + 20)
+                              .clamp(0, gsm.saveState.maxBonusMoves + 20);
+                        }),
+                      ),
+                    ],
+                  ),
+              ),
+            );
+          }),
+
+          // Daily Chest — bottom right
+          Positioned(
+            right: 20,
+            bottom: 24,
+            child: SafeArea(
+              child: const DailyChestButton(),
+            ),
+          ),
+
+          // Ko-fi support — bottom left
+          Positioned(
+            left: 20,
+            bottom: 24,
+            child: SafeArea(
+              child: _buildKofiButton(),
+            ),
+          ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildDebugButton({required String label, required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: Colors.red.withValues(alpha: 0.3),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.red.withValues(alpha: 0.5)),
+        ),
+        child: Text(
+          label,
+          style: const TextStyle(
+            color: Colors.redAccent,
+            fontSize: 13,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildKofiButton() {
+    return GestureDetector(
+      onTap: () => _showKofiDialog(context),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFFFF5E5B), Color(0xFFFF9966)],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFFFF5E5B).withValues(alpha: 0.3),
+                  blurRadius: 12,
+                  spreadRadius: 1,
+                ),
+              ],
+            ),
+            child: const Center(
+              child: EmojiText('\u2615', fontSize: 30), // ☕
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Support',
+            style: TextStyle(
+              color: Color(0xFFFF9966),
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showKofiDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 340),
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xFF2a1a4e), Color(0xFF1a1a2e)],
+            ),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: const Color(0xFFFF5E5B).withValues(alpha: 0.4),
+              width: 2,
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const EmojiText('\u2615', fontSize: 48),
+              const SizedBox(height: 16),
+              const Text(
+                'Mojiii 3',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'This game is free & open source.\n'
+                'If you enjoy it, consider buying me a coffee!',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.7),
+                  fontSize: 14,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 20),
+              GestureDetector(
+                onTap: () {
+                  launchUrl(
+                    Uri.parse('https://ko-fi.com/casparjones'),
+                    mode: LaunchMode.externalApplication,
+                  );
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 24, vertical: 12),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFFFF5E5B), Color(0xFFFF9966)],
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFFFF5E5B).withValues(alpha: 0.4),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      EmojiText('\u2615', fontSize: 20),
+                      SizedBox(width: 10),
+                      Text(
+                        'Buy me a Coffee',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: Text(
+                  'Maybe later',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.5),
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -287,24 +504,35 @@ class _MainMenuScreenState extends State<MainMenuScreen>
           builder: (context, child) {
             return Transform.translate(
               offset: Offset(0, _logoEmojiAnimation.value),
-              child: Text(
-                _emojis[_logoEmojiIndex],
-                style: const TextStyle(fontSize: 64),
+              child: EmojiText(
+                EmojiTheme.active.id == 'theme_fruit'
+                    ? '🍓'
+                    : _emojis[_logoEmojiIndex],
+                fontSize: 64,
               ),
             );
           },
         ),
         const SizedBox(height: 12),
-        const Text(
-          'Match3',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 48,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 4,
-            shadows: [
-              Shadow(color: Color(0xFF9C27B0), blurRadius: 20),
-              Shadow(color: Color(0xFF7C4DFF), blurRadius: 40),
+        Text.rich(
+          TextSpan(
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 48,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 4,
+              shadows: [
+                Shadow(color: Color(0xFF9C27B0), blurRadius: 20),
+                Shadow(color: Color(0xFF7C4DFF), blurRadius: 40),
+              ],
+            ),
+            children: [
+              const TextSpan(text: 'M'),
+              TextSpan(
+                text: '🍓',
+                style: EmojiText.emojiStyle(fontSize: 44),
+              ),
+              const TextSpan(text: 'jiii 3'),
             ],
           ),
         ),
