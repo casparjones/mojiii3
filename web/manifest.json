@@ -5,7 +5,7 @@
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "Mojiii 3 - A candy crush style match-3 puzzle game",
+    "description": "Mojiii 3 - A free and open source match-3 puzzle game",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

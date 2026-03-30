@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-A Candy Crush-style match-3 puzzle game built with Flutter/Dart. Players swap adjacent gems to create matches of 3+ in a row/column, triggering cascades, scoring, and level progression.
+A match-3 puzzle game built with Flutter/Dart. Players swap adjacent gems to create matches of 3+ in a row/column, triggering cascades, scoring, and level progression. Free and open source, funded by voluntary donations (Ko-fi).
 
 ## Build & Run Commands
 

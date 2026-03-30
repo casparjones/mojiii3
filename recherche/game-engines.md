@@ -72,12 +72,12 @@ die Weiterentwicklung (Animationen, Partikel, Sprite-Management) verbessern kann
 | Lernkurve | Mittel |
 | Features | 2D-fokussiert, sehr performant, kleiner Footprint |
 | Community | Klein aber spezialisiert |
-| Match3-Referenz | Von King gebaut (Candy Crush Saga) -- Match3 ist Kernkompetenz |
+| Match3-Referenz | Match3 ist Kernkompetenz der Engine |
 | APK-Groesse | Sehr klein (ca. 2-3 MB Basis) -- Branchenbester |
 | Migration | Kompletter Neubau |
 
 **Vorteile:**
-- Wurde von King (Candy Crush) entwickelt -- Match3 ist im Kern der Engine
+- Match3 ist im Kern der Engine
 - Kleinste APK-Groesse aller Optionen
 - Hervorragende 2D-Performance
 - Kostenlos ohne Einschraenkungen
