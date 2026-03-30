@@ -29,7 +29,7 @@ android {
 
     signingConfigs {
         create("release") {
-            val keystoreFile = System.getenv("KEYSTORE_FILE")
+            val keystoreFile = System.getenv("KEYSTORE_FILE")?.takeIf { it.isNotEmpty() }
             if (keystoreFile != null) {
                 storeFile = file(keystoreFile)
                 storePassword = System.getenv("KEYSTORE_PASSWORD")
@@ -41,7 +41,7 @@ android {
 
     buildTypes {
         release {
-            val hasKeystore = System.getenv("KEYSTORE_FILE") != null
+            val hasKeystore = System.getenv("KEYSTORE_FILE")?.isNotEmpty() == true
             signingConfig = signingConfigs.getByName(if (hasKeystore) "release" else "debug")
         }
     }
