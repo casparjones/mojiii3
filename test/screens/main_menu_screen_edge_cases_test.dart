@@ -35,7 +35,7 @@ void main() {
       await tester.pumpWidget(createApp());
       await tester.pump();
 
-      final textWidget = tester.widget<Text>(find.text('Match3'));
+      final textWidget = tester.widget<Text>(find.text('Mojiii3'));
       final style = textWidget.style!;
       expect(style.fontSize, 48);
       expect(style.fontWeight, FontWeight.bold);

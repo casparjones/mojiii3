@@ -14,11 +14,11 @@ void main() {
       return createTestApp(home: const MainMenuScreen());
     }
 
-    testWidgets('displays Match3 logo text', (tester) async {
+    testWidgets('displays Mojiii3 logo text', (tester) async {
       await tester.pumpWidget(createApp());
       await tester.pump();
 
-      expect(find.text('Match3'), findsOneWidget);
+      expect(find.text('Mojiii3'), findsOneWidget);
     });
 
     testWidgets('displays Play button', (tester) async {

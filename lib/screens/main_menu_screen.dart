@@ -514,25 +514,16 @@ class _MainMenuScreenState extends State<MainMenuScreen>
           },
         ),
         const SizedBox(height: 12),
-        Text.rich(
-          TextSpan(
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 48,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 4,
-              shadows: [
-                Shadow(color: Color(0xFF9C27B0), blurRadius: 20),
-                Shadow(color: Color(0xFF7C4DFF), blurRadius: 40),
-              ],
-            ),
-            children: [
-              const TextSpan(text: 'M'),
-              TextSpan(
-                text: '🍓',
-                style: EmojiText.emojiStyle(fontSize: 44),
-              ),
-              const TextSpan(text: 'jiii 3'),
+        const Text(
+          'Mojiii3',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 48,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 4,
+            shadows: [
+              Shadow(color: Color(0xFF9C27B0), blurRadius: 20),
+              Shadow(color: Color(0xFF7C4DFF), blurRadius: 40),
             ],
           ),
         ),
