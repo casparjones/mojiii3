@@ -1,0 +1,18 @@
+Mojiii 3 ist ein freies Open-Source Match-3 Puzzlespiel inspiriert von klassischen Juwelen-Tausch Puzzlern.
+
+Tausche benachbarte Emoji-Juwelen, um Reihen von 3 oder mehr zu bilden. Erzeuge kaskadierende Combos, schalte spezielle Juwelen frei und meistere immer anspruchsvollere Level.
+
+Features:
+- 6 bunte Juwelentypen mit austauschbaren Emoji-Themes
+- Spezial-Juwelen: gestreift (Reihe/Spalte), Bombe (3x3), Regenbogen (eine Farbe)
+- Kaskaden-Combos mit Punkte-Multiplikatoren
+- Prozedural generierte Level mit Zug- und Zeitlimits
+- Hindernisse: Eis, Stein, Ketten und Schleim
+- Boss-Level mit einzigartigen Mechaniken
+- Endlos-Modus zum entspannten Spielen
+- Power-Ups und In-Game Shop (kein echtes Geld, Coins werden erspielt)
+- Hinweis-System und Deadlock-Erkennung
+- Hintergrundmusik und Soundeffekte
+- Komplett offline - kein Tracking, keine Werbung, kein Internet noetig
+
+Mojiii 3 respektiert deine Privatsphaere. Es werden keine Daten gesammelt, es gibt keine Werbung und es werden keine Berechtigungen benoetigt.

@@ -48,6 +48,12 @@ class MusicManager {
             options: {AVAudioSessionOptions.mixWithOthers},
           ),
         ));
+        // Fallback: restart on completion in case loop mode doesn't work on some platforms
+        _player!.onPlayerComplete.listen((_) {
+          if (_isPlaying) {
+            _player?.play(AssetSource('sounds/background_music.mp3'));
+          }
+        });
       }
       await _player!.setReleaseMode(ReleaseMode.loop);
       await _player!.setVolume(_volume);

@@ -1,8 +1,9 @@
 name: match3
-description: "Mojiii 3 - A candy crush style match-3 puzzle game"
-# The following line prevents the package from being accidentally published to
-# pub.dev using `flutter pub publish`. This is preferred for private packages.
-publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+description: "Mojiii 3 - A free and open source match-3 puzzle game"
+homepage: https://github.com/casparjones/mojiii3
+repository: https://github.com/casparjones/mojiii3
+issue_tracker: https://github.com/casparjones/mojiii3/issues
+publish_to: 'none'
 
 # The following defines the version and build number for your application.
 # A version number is three numbers separated by dots, like 1.2.43

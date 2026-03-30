@@ -1,0 +1,18 @@
+Mojiii 3 is a free and open source match-3 puzzle game inspired by classic gem-swapping puzzlers.
+
+Swap adjacent emoji gems to create matches of 3 or more in a row or column. Trigger cascading combos, unlock special gems, and progress through increasingly challenging levels.
+
+Features:
+- 6 colorful gem types with swappable emoji themes
+- Special gems: striped (clears row/col), bomb (3x3 blast), rainbow (clears a color)
+- Cascade combos with score multipliers
+- Procedurally generated levels with move and time constraints
+- Obstacles: ice, stone, chains, and slime
+- Boss levels with unique mechanics
+- Free/endless mode for casual play
+- Power-ups and in-game shop (no real money, coins earned by playing)
+- Hint system and deadlock detection
+- Background music and sound effects
+- Fully offline - no tracking, no ads, no internet required
+
+Mojiii 3 respects your privacy. It collects no data, contains no ads, and requires no permissions.

@@ -45,15 +45,14 @@ class AudioManager {
     bool useAudio = false,
   }) : _useAudio = useAudio {
     if (_useAudio) {
-      _players = List.generate(3, (_) {
+      _players = List.generate(4, (_) {
         final player = AudioPlayer();
-        player.setPlayerMode(PlayerMode.lowLatency);
         player.setAudioContext(AudioContext(
           android: AudioContextAndroid(
             isSpeakerphoneOn: false,
             audioMode: AndroidAudioMode.normal,
             contentType: AndroidContentType.sonification,
-            usageType: AndroidUsageType.assistanceSonification,
+            usageType: AndroidUsageType.game,
             audioFocus: AndroidAudioFocus.none,
           ),
           iOS: AudioContextIOS(

@@ -166,7 +166,7 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     super.initState();
     _audioManager = widget.audioManager ??
         AudioManager(
-          settingsProvider: () => GameSettings(soundEnabled: true),
+          settingsProvider: () => _settingsFromContext(),
           useAudio: true,
         );
     _matchDetector = const MatchDetector();
@@ -194,6 +194,11 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       if (mounted && _hintPositions.isNotEmpty) setState(() {});
     });
     _initBoard();
+  }
+
+  GameSettings _settingsFromContext() {
+    return GameStateManagerProvider.maybeRead(context)?.settings ??
+        GameSettings(soundEnabled: true);
   }
 
   @override

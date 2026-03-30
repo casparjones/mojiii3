@@ -1,0 +1,8 @@
+Initial release of Mojiii 3.
+
+- Match-3 gameplay with 6 gem types and emoji themes
+- Special gems: striped, bomb, and rainbow
+- Procedurally generated levels with obstacles
+- Boss levels, power-ups, and in-game shop
+- Free/endless mode
+- Background music and sound effects

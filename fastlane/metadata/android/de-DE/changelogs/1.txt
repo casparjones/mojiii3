@@ -1,0 +1,8 @@
+Erstveroeffentlichung von Mojiii 3.
+
+- Match-3 Gameplay mit 6 Juwelentypen und Emoji-Themes
+- Spezial-Juwelen: gestreift, Bombe und Regenbogen
+- Prozedural generierte Level mit Hindernissen
+- Boss-Level, Power-Ups und In-Game Shop
+- Endlos-Modus
+- Hintergrundmusik und Soundeffekte
