@@ -26,6 +26,13 @@ jobs:
         with:
           channel: stable
 
+      - name: Set version from tag
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          BUILD_NUMBER="${GITHUB_RUN_NUMBER}"
+          sed -i "s/^version: .*/version: ${TAG}+${BUILD_NUMBER}/" pubspec.yaml
+          echo "Version set to ${TAG}+${BUILD_NUMBER}"
+
       - name: Install dependencies
         run: flutter pub get
 
